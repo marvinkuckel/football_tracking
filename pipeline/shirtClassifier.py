@@ -32,10 +32,17 @@ class ShirtClassifier:
         track_classes = data["trackClasses"]      # trackClasses player = 2 
         
         #only pic out the players from the detected tracks -> trackClasses
+        players = [i for i, cls in enumerate(track_classes) if cls == 2]
         
         #get the color for every player -> maybe in a list with the color of every player
+        colors = []
+        for i in players:
+            pass
+
         
         #kluster the colors (klassifier) - i guess i will use KMeans with 2 clusters - in the end i have the 2 different teamcolors
+        kmeans = KMeans(n_clusters=2, random_state=0).fit(colors)
+        teamAColor, teamBColor = kmeans.cluster_centers_
         
         #every player is put into a team (using the klassifiers result)
         
