@@ -1,3 +1,6 @@
+from sklearn.cluster import KMeans
+import numpy as np
+
 class ShirtClassifier:
     def __init__(self):
         self.name = "Shirt Classifier" # Do not change the name of the module as otherwise recording replay would break!
