@@ -22,6 +22,24 @@ class ShirtClassifier:
         #           0: Team not decided or not a player (e.g. ball, goal keeper, referee)
         #           1: Player belongs to team A
         #           2: Player belongs to team B
-        return { "teamAColor": None,
-                 "teamBColor": None,
-                 "teamClasses": None }
+        
+        #Accessing the image and tracks
+        image = data["image"]
+        tracks = data["tracks"]
+        track_classes = data["trackClasses"]      # trackClasses player = 2 
+        
+        #only pic out the players from the detected tracks -> trackClasses
+        
+        #get the color for every player -> maybe in a list with the color of every player
+        
+        #kluster the colors (klassifier) - i guess i will use KMeans with 2 clusters - in the end i have the 2 different teamcolors
+        
+        #every player is put into a team (using the klassifiers result)
+        
+        #returning something like this:
+        #return { "teamAColor": tupleA,
+        #         "teamBColor": tupleB,
+        #         "teamClasses": teamClasses }
+        
+        
+        
