@@ -34,10 +34,26 @@ class ShirtClassifier:
         #only pic out the players from the detected tracks -> trackClasses
         players = [i for i, cls in enumerate(track_classes) if cls == 2]
         
+        #in case only 1 team is detected - so there is no error
+        if len(players) < 2:
+            return {
+                "teamAColor": (0, 0, 255),
+                "teamBColor": (255, 0, 0),
+                "teamClasses": [0] * len(track_classes)
+            }
+        
         #get the color for every player -> maybe in a list with the color of every player
         colors = []
         for i in players:
             pass
+        
+        #in case only 1 team/color is detected - so there is no error
+        if len(colors) < 2:
+            return {
+                "teamAColor": (0, 0, 255),
+                "teamBColor": (255, 0, 0),
+                "teamClasses": [0] * len(track_classes)
+            }
 
         
         #kluster the colors (klassifier) - i guess i will use KMeans with 2 clusters - in the end i have the 2 different teamcolors
