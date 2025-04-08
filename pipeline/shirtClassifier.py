@@ -44,7 +44,7 @@ class ShirtClassifier:
             }
         
         #get the color for every traked player in the actual frame
-        colors = []
+        colors = []     # this list will only be used to find the 2 clusters/teams
         for player in players:
             #get the coordinates of the players shirts 
             #x and y is the center of the Box
@@ -76,12 +76,33 @@ class ShirtClassifier:
         kmeans = KMeans(n_clusters=2, random_state=0).fit(colors)
         teamAColor, teamBColor = kmeans.cluster_centers_
         
-        #every player is put into a team (using the klassifiers result)
+        #put every player and put it into the right team
+        teamClasses = []
+        for i, cls in enumerate(track_classes):    #for every track we need the class and index
+            if cls != 2:       #these items are not the players 
+                teamClasses.append(0) #we dont care about these
+            else:
+                x, y, w, h = tracks[i]   #the coordinates of the box
+                x1, y1 = int(x - w / 2), int(y - h / 2) #the corner left top of the box
+                x2, y2 = int(x + w / 2), int(y + h / 2) #the corner right bottom of the box
+                shirt_region = image[y1:y2, x1:x2]   #here i need cv2
+                #skipping/continueing when box is not in the picture
+                if shirt_region.size == 0:
+                    teamClasses.append(0)
+                    continue
+                #calculate the average color of the shirt region
+                avg_color = shirt_region.mean(axis=(0, 1))
+                
+                #to check, which cluster/Team/color the player is we need to see, if the color of the player (avg_color) is closer to teamA or teamB
+                distA = np.linalg.norm(avg_color - teamAColor)  #calculate the distance to the teamA color
+                distB = np.linalg.norm(avg_color - teamBColor)  #calculate the distance to the teamB color
+                teamClasses.append(1 if distA < distB else 2)   #check which distance is smaller and but the player in that team
+ 
         
         #returning something like this:
-        #return { "teamAColor": tupleA,
-        #         "teamBColor": tupleB,
-        #         "teamClasses": teamClasses }
+        return { "teamAColor": tupleA,
+                 "teamBColor": tupleB,
+                 "teamClasses": teamClasses }
         
         
         
