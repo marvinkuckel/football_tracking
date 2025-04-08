@@ -1,5 +1,6 @@
 from sklearn.cluster import KMeans
 import numpy as np
+import cv2
 
 class ShirtClassifier:
     def __init__(self):
@@ -42,10 +43,25 @@ class ShirtClassifier:
                 "teamClasses": [0] * len(track_classes)
             }
         
-        #get the color for every player -> maybe in a list with the color of every player
+        #get the color for every traked player in the actual frame
         colors = []
-        for i in players:
-            pass
+        for player in players:
+            #get the coordinates of the players shirts 
+            #x and y is the center of the Box
+            #w and h is the width and height of the box
+            x, y, w, h = tracks[player]  #find the box for every player in players
+            x1, y1 = int(x - w / 2), int(y - h / 2)  #the corner left top of the box
+            x2, y2 = int(x + w / 2), int(y + h / 2)  #the corner right bottom of the box
+            shirt_region = image[y1:y2, x1:x2]     #here i need cv2 
+            #skipping/continueing when box is not in the picture
+            if shirt_region.size == 0:
+                continue
+            #calculate the average color of the shirt region
+            avg_color = shirt_region.mean(axis=(0, 1))  #BGR  -> output like this: [120, 50, 200]
+            colors.append(avg_color)   #put the average color of the shirt into the list
+            #colors should be a list of tuples with the average color of every player. 
+            #for example there will be many blue and many red colors.
+            #so i can use KMeans to cluster the colors into 2 clusters (teamA and teamB)
         
         #in case only 1 team/color is detected - so there is no error
         if len(colors) < 2:
