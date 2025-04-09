@@ -78,11 +78,11 @@ class ShirtClassifier:
         
         #put every player and put it into the right team
         teamClasses = []
-        for i, cls in enumerate(track_classes):    #for every track we need the class and index
+        for player, cls in enumerate(track_classes):    #for every track we need the class and index
             if cls != 2:       #these items are not the players 
                 teamClasses.append(0) #we dont care about these
             else:
-                x, y, w, h = tracks[i]   #the coordinates of the box
+                x, y, w, h = tracks[player]   #the coordinates of the box
                 x1, y1 = int(x - w / 2), int(y - h / 2) #the corner left top of the box
                 x2, y2 = int(x + w / 2), int(y + h / 2) #the corner right bottom of the box
                 shirt_region = image[y1:y2, x1:x2]   #here i need cv2
@@ -99,10 +99,11 @@ class ShirtClassifier:
                 teamClasses.append(1 if distA < distB else 2)   #check which distance is smaller and but the player in that team
  
         
-        #returning something like this:
-        return { "teamAColor": tupleA,
-                 "teamBColor": tupleB,
-                 "teamClasses": teamClasses }
+        #returning Teams and their colors:
+        return { "teamAColor": teamAColor,     #the color of teams a
+                 "teamBColor": teamBColor,     #the color of team b
+                 "teamClasses": teamClasses }  #for every player ether a 0 or 1 or 2 is apppended. 
+                                               # 0 is no player, 1 is team A, 2 is Team B
         
         
         
