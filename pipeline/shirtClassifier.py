@@ -76,6 +76,10 @@ class ShirtClassifier:
         kmeans = KMeans(n_clusters=2, random_state=0).fit(colors)
         teamAColor, teamBColor = kmeans.cluster_centers_
         
+        #the team color schould not chnage -> team A is always the darker one.
+        if teamAColor.mean() > teamBColor.mean():
+            teamAColor, teamBColor = teamBColor, teamAColor
+        
         #put every player and put it into the right team
         teamClasses = []
         for player, cls in enumerate(track_classes):    #for every track we need the class and index
