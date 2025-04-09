@@ -99,9 +99,9 @@ class ShirtClassifier:
                 teamClasses.append(1 if distA < distB else 2)   #check which distance is smaller and but the player in that team
  
         
-        #returning Teams and their colors:
-        return { "teamAColor": teamAColor,     #the color of teams a
-                 "teamBColor": teamBColor,     #the color of team b
+        #returning Teams and their colors ind whole numbers:
+        return { "teamAColor": tuple(map(int, teamAColor)),     #the color of teams a
+                 "teamBColor": tuple(map(int, teamBColor)),     #the color of team b
                  "teamClasses": teamClasses }  #for every player ether a 0 or 1 or 2 is apppended. 
                                                # 0 is no player, 1 is team A, 2 is Team B
         
