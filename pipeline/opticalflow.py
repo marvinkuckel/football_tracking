@@ -1,19 +1,24 @@
 import numpy as np
+import cv2
 
 class OpticalFlow:
     def __init__(self):
         self.name = "Optical Flow" # Do not change the name of the module as otherwise recording replay would break!
+        self.pre_image = None
 
     def start(self, data):
-        # TODO: Implement start up procedure of the module
-        pass
+        self.pre_image = None
 
     def stop(self, data):
-        # TODO: Implement shut down procedure of the module
-        pass
+        self.pre_image = None
 
     def step(self, data):
         # TODO: Implement processing of a single frame
+        frame = data["image"]
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+        self.pre_image = gray if self.pre_image is None else self.pre_image
+        
         # The task of the optical flow module is to determine the overall avergae pixel shift between this and the previous image. 
         # You 
 
