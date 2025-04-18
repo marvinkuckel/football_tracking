@@ -34,8 +34,23 @@ class OpticalFlow:
                 minDistance = 7,
                 blockSize = 7
             )
+        
+        next_points, status, _ = cv2.calcOpticalFlowPyrLK(
+            self.pre_image, gray, self.pre_points, None
+            )
+        
+        good_old = self.pre_points[status == 1]  # (1 = True)
+        good_new = next_points[status == 1]
 
-        self.pre_image = gray if self.pre_image is None else self.pre_image
+        if len(good_old) > 0:  # If there are points to track...
+            flow = good_new - good_old  # vector flow
+            mean_flow = np.mean(flow, axis=0)
+        else:
+            mean_flow = np.array([0.0, 0.0])
+
+        self.pre_image = gray
+
+        self.pre_points = good_new.reshape(-1, 1, 2) if len(good_new) > 0 else None  # Reset
 
         # The task of the optical flow module is to determine the overall avergae pixel shift between this and the previous image. 
         # You 
