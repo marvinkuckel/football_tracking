@@ -1,3 +1,5 @@
+import numpy as np
+
 class OpticalFlow:
     def __init__(self):
         self.name = "Optical Flow" # Do not change the name of the module as otherwise recording replay would break!
@@ -20,6 +22,6 @@ class OpticalFlow:
         #
         # The "opticalFlow" signal must contain a 1x2 NumPy Array with the X and Y shift (delta values in pixels) of the image motion vector
         return {
-           "opticalFlow": None
+           "opticalFlow": np.array([0.0, 0.0], dtype = np.float32) # Placeholder for the optical flow vector
         }
 
