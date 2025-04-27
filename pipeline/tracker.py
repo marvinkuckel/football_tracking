@@ -1,10 +1,17 @@
+import numpy as np
+
 # Note: A typical tracker design implements a dedicated filter class for keeping the individual state of each track
 # The filter class represents the current state of the track (predicted position, size, velocity) as well as additional information (track age, class, missing updates, etc..)
 # The filter class is also responsible for assigning a unique ID to each newly formed track
 class Filter:
-    def __init__(self, z, cls):
+    def __init__(self, id, z, cls, current_optical_flow):
         # TODO: Implement filter initializstion
-        pass
+        self.id = id
+        self.cls = cls
+        self.box = z
+        self.velocity = current_optical_flow
+        self.track_age = 0
+        self.missing_age = 0
         
     # TODO: Implement remaining funtionality for an individual track
     
@@ -12,7 +19,16 @@ class Filter:
 class Tracker:
     def __init__(self):
         self.name = "Tracker" # Do not change the name of the module as otherwise recording replay would break!
+        
+        self.id_generator = Tracker.__id_generator()
+        self.tracks: list[Filter] = []
 
+    def __id_generator():
+        i = 0
+        while True:
+            yield i
+            i += 1
+            
     def start(self, data):
         # TODO: Implement start up procedure of the module
         pass
@@ -20,6 +36,22 @@ class Tracker:
     def stop(self, data):
         # TODO: Implement shut down procedure of the module
         pass
+    
+    def get_track_ids(self) -> np.ndarray:
+        return np.array([track.id for track in self.tracks])
+    
+    def get_track_boxes(self) -> np.ndarray:
+        return np.array([track.box for track in self.tracks])
+    
+    def get_track_velocities(self) -> np.ndarray:
+        return np.array([track.velocity for track in self.tracks])
+    
+    def get_track_classes(self) -> np.ndarray:
+        return np.array([track.cls for track in self.tracks])
+    
+    def get_tracking_ages(self) -> np.ndarray:
+        return np.array([track.track_age for track in self.tracks])
+
 
     def step(self, data):
         # TODO: Implement processing of a detection list
@@ -46,11 +78,22 @@ class Tracker:
         #                               2: Player
         #                               3: Referee
         #       "trackIds":         A Nx1 List of unique IDs for each track. IDs must not be reused and be unique during the lifetime of the program. 
+        
+        detections, classes = data["detections"], data["classes"]
+        
+        if len(self.tracks) == 0:
+            # initialization
+            new_id = next(self.id_generator)
+            self.tracks = [Filter(new_id, box, cls, data["opticalFlow"]) for box, cls in zip(detections, classes)]
+        else:
+            # actual tracking
+            pass
+            
         return {
-            "tracks": None,
-            "trackVelocities": None,
-            "trackAge": None,
-            "trackClasses": None,
-            "trackIds": None
+            "tracks": self.get_track_boxes(),
+            "trackVelocities": self.get_track_velocities(),
+            "trackAge": self.get_tracking_ages(),
+            "trackClasses": self.get_track_classes(),
+            "trackIds": self.get_track_ids()
         }
 
