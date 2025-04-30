@@ -1,3 +1,22 @@
+'''
+Module detects objects (Ball, Goalkeeper, Player, Referee) per frame using a pretrained YOLOv8n model.
+
+Outputs:
+- detections: Bounding boxes (center x, center y, width, height)
+- classes: Object classes (0 = Ball, 1 = Goalkeeper, 2 = Player, 3 = Referee)
+
+Optimizations:
+- Runs on GPU with half precision (FP16) if available
+- Separate confidence thresholds for ball vs other objects
+
+Limitations:
+- Detection is frame-by-frame (no full tracking memory)
+- Instability in class assignment
+- Ball is sometimes not detected
+- High input resolution (864) for better small object detection slows video down
+'''
+
+
 from ultralytics import YOLO
 import torch
 import numpy as np
