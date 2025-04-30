@@ -51,11 +51,27 @@ class Detector:
         detections = []
         classes = []
 
+        VALID_CLASSES = {0, 1, 2, 3}  # specifies relevant classes in case model changes in future
+
         for box in results.boxes:
             # each box contains one detection result from YOLO (coordinates, class, confidence)
 
-            x_center, y_center, width, height = box.xywh[0].tolist()  # bounding box (center coordinates width, height)
             cls_id = int(box.cls.item())  # predicted class id (0 = ball, 1 = goalkeeper, 2 = player, 3 = referee)
+
+            if cls_id not in VALID_CLASSES:
+                continue  # skip other classes, if there are any
+
+            score = float(box.conf.item())  # confidence score
+
+            # class specific thresholds
+            if cls_id == 0:         # ball
+                if score < 0.2:     # lower confidence, because detection is harder
+                    continue
+            else:                   # player, goalkeeper, referee
+                if score < 0.4:
+                    continue
+
+            x_center, y_center, width, height = box.xywh[0].tolist()  # bounding box (center coordinates width, height)
             detections.append([x_center, y_center, width, height])  # adds bounding box to list
             classes.append([cls_id])  # adds corresponding class id
 
@@ -72,3 +88,4 @@ class Detector:
             "detections": detections,
             "classes": classes
         }
+
