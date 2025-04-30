@@ -1,0 +1,18 @@
+name: football_gpu
+channels:
+  - pytorch
+  - nvidia
+  - defaults
+dependencies:
+  - python=3.10
+  - numpy
+  - pytorch
+  - pytorch-cuda=11.8
+  - torchaudio
+  - torchvision
+  - pip
+  - pip:
+      - ultralytics
+      - opencv-python
+      - matplotlib
+      - black
