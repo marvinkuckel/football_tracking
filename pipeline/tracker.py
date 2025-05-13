@@ -1,3 +1,4 @@
+from typing import Iterator
 import numpy as np
 
 # Note: A typical tracker design implements a dedicated filter class for keeping the individual state of each track
@@ -20,10 +21,10 @@ class Tracker:
     def __init__(self):
         self.name = "Tracker" # Do not change the name of the module as otherwise recording replay would break!
         
-        self.id_generator = Tracker.__id_generator()
+        self.id_generator = Tracker._id_generator()
         self.tracks: list[Filter] = []
 
-    def __id_generator():
+    def _id_generator() -> Iterator[int]:
         i = 0
         while True:
             yield i
@@ -79,12 +80,11 @@ class Tracker:
         #                               3: Referee
         #       "trackIds":         A Nx1 List of unique IDs for each track. IDs must not be reused and be unique during the lifetime of the program. 
         
-        detections, classes = data["detections"], data["classes"]
+        detection_boxes, detection_classes = data["detections"], data["classes"]
         
         if len(self.tracks) == 0:
             # initialization
-            new_id = next(self.id_generator)
-            self.tracks = [Filter(new_id, box, cls, data["opticalFlow"]) for box, cls in zip(detections, classes)]
+            self.tracks = [Filter(next(self.id_generator), box, cls, data["opticalFlow"]) for box, cls in zip(detection_boxes, detection_classes)]
         else:
             # actual tracking
             pass
