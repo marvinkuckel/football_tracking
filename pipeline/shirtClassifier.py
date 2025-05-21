@@ -2,9 +2,10 @@ from sklearn.cluster import KMeans
 import numpy as np
 import cv2
 
+
 class ShirtClassifier:
     def __init__(self):
-        self.name = "Shirt Classifier" # Do not change the name of the module as otherwise recording replay would break!
+        self.name = "Shirt Classifier"  # Do not change the name of the module as otherwise recording replay would break!
 
     def start(self, data):
         # TODO: Implement start up procedure of the module
@@ -26,88 +27,101 @@ class ShirtClassifier:
         #           0: Team not decided or not a player (e.g. ball, goal keeper, referee)
         #           1: Player belongs to team A
         #           2: Player belongs to team B
-        
-        #Accessing the image and tracks
+
+        # Accessing the image and tracks
         image = data["image"]
         tracks = data["tracks"]
-        track_classes = data["trackClasses"]      # trackClasses player = 2 
-        
-        #only pic out the players from the detected tracks -> trackClasses
+        track_classes = data["trackClasses"]  # trackClasses player = 2
+
+        # only pic out the players from the detected tracks -> trackClasses
         players = [i for i, cls in enumerate(track_classes) if cls == 2]
-        
-        #in case only 1 team is detected - so there is no error
+
+        # in case only 1 team is detected - so there is no error
         if len(players) < 2:
             return {
                 "teamAColor": (0, 0, 255),
                 "teamBColor": (255, 0, 0),
-                "teamClasses": [0] * len(track_classes)
+                "teamClasses": [0] * len(track_classes),
             }
-        
-        #get the color for every traked player in the actual frame
-        colors = []     # this list will only be used to find the 2 clusters/teams
+
+        # get the color for every traked player in the actual frame
+        colors = []  # this list will only be used to find the 2 clusters/teams
         for player in players:
-            #get the coordinates of the players shirts 
-            #x and y is the center of the Box
-            #w and h is the width and height of the box
-            x, y, w, h = tracks[player]  #find the box for every player in players
-            x1, y1 = int(x - w / 2), int(y - h / 2)  #the corner left top of the box
-            x2, y2 = int(x + w / 2), int(y + h / 2)  #the corner right bottom of the box
-            shirt_region = image[y1:y2, x1:x2]     #here i need cv2 
-            #skipping/continueing when box is not in the picture
+            # get the coordinates of the players shirts
+            # x and y is the center of the Box
+            # w and h is the width and height of the box
+            x, y, w, h = tracks[player]  # find the box for every player in players
+            x1, y1 = int(x - w / 2), int(y - h / 2)  # the corner left top of the box
+            x2, y2 = int(x + w / 2), int(
+                y + h / 2
+            )  # the corner right bottom of the box
+            shirt_region = image[y1:y2, x1:x2]  # here i need cv2
+            # skipping/continueing when box is not in the picture
             if shirt_region.size == 0:
                 continue
-            #calculate the average color of the shirt region
-            avg_color = shirt_region.mean(axis=(0, 1))  #BGR  -> output like this: [120, 50, 200]
-            colors.append(avg_color)   #put the average color of the shirt into the list
-            #colors should be a list of tuples with the average color of every player. 
-            #for example there will be many blue and many red colors.
-            #so i can use KMeans to cluster the colors into 2 clusters (teamA and teamB)
-        
-        #in case only 1 team/color is detected - so there is no error
+            # calculate the average color of the shirt region
+            avg_color = shirt_region.mean(
+                axis=(0, 1)
+            )  # BGR  -> output like this: [120, 50, 200]
+            colors.append(avg_color)  # put the average color of the shirt into the list
+            # colors should be a list of tuples with the average color of every player.
+            # for example there will be many blue and many red colors.
+            # so i can use KMeans to cluster the colors into 2 clusters (teamA and teamB)
+
+        # in case only 1 team/color is detected - so there is no error
         if len(colors) < 2:
             return {
                 "teamAColor": (0, 0, 255),
                 "teamBColor": (255, 0, 0),
-                "teamClasses": [0] * len(track_classes)
+                "teamClasses": [0] * len(track_classes),
             }
 
-        
-        #kluster the colors (klassifier) - i guess i will use KMeans with 2 clusters - in the end i have the 2 different teamcolors
+        # kluster the colors (klassifier) - i guess i will use KMeans with 2 clusters - in the end i have the 2 different teamcolors
         kmeans = KMeans(n_clusters=2, random_state=0).fit(colors)
         teamAColor, teamBColor = kmeans.cluster_centers_
-        
-        #the team color schould not chnage -> team A is always the darker one.
+
+        # the team color schould not chnage -> team A is always the darker one.
         if teamAColor.mean() > teamBColor.mean():
             teamAColor, teamBColor = teamBColor, teamAColor
-        
-        #put every player and put it into the right team
+
+        # put every player and put it into the right team
         teamClasses = []
-        for player, cls in enumerate(track_classes):    #for every track we need the class and index
-            if cls != 2:       #these items are not the players 
-                teamClasses.append(0) #we dont care about these
+        for player, cls in enumerate(
+            track_classes
+        ):  # for every track we need the class and index
+            if cls != 2:  # these items are not the players
+                teamClasses.append(0)  # we dont care about these
             else:
-                x, y, w, h = tracks[player]   #the coordinates of the box
-                x1, y1 = int(x - w / 2), int(y - h / 2) #the corner left top of the box
-                x2, y2 = int(x + w / 2), int(y + h / 2) #the corner right bottom of the box
-                shirt_region = image[y1:y2, x1:x2]   #here i need cv2
-                #skipping/continueing when box is not in the picture
+                x, y, w, h = tracks[player]  # the coordinates of the box
+                x1, y1 = int(x - w / 2), int(
+                    y - h / 2
+                )  # the corner left top of the box
+                x2, y2 = int(x + w / 2), int(
+                    y + h / 2
+                )  # the corner right bottom of the box
+                shirt_region = image[y1:y2, x1:x2]  # here i need cv2
+                # skipping/continueing when box is not in the picture
                 if shirt_region.size == 0:
                     teamClasses.append(0)
                     continue
-                #calculate the average color of the shirt region
+                # calculate the average color of the shirt region
                 avg_color = shirt_region.mean(axis=(0, 1))
-                
-                #to check, which cluster/Team/color the player is we need to see, if the color of the player (avg_color) is closer to teamA or teamB
-                distA = np.linalg.norm(avg_color - teamAColor)  #calculate the distance to the teamA color
-                distB = np.linalg.norm(avg_color - teamBColor)  #calculate the distance to the teamB color
-                teamClasses.append(1 if distA < distB else 2)   #check which distance is smaller and but the player in that team
- 
-        
-        #returning Teams and their colors ind whole numbers:
-        return { "teamAColor": tuple(map(int, teamAColor)),     #the color of teams a
-                 "teamBColor": tuple(map(int, teamBColor)),     #the color of team b
-                 "teamClasses": teamClasses }  #for every player ether a 0 or 1 or 2 is apppended. 
-                                               # 0 is no player, 1 is team A, 2 is Team B
-        
-        
-        
+
+                # to check, which cluster/Team/color the player is we need to see, if the color of the player (avg_color) is closer to teamA or teamB
+                distA = np.linalg.norm(
+                    avg_color - teamAColor
+                )  # calculate the distance to the teamA color
+                distB = np.linalg.norm(
+                    avg_color - teamBColor
+                )  # calculate the distance to the teamB color
+                teamClasses.append(
+                    1 if distA < distB else 2
+                )  # check which distance is smaller and but the player in that team
+
+        # returning Teams and their colors ind whole numbers:
+        return {
+            "teamAColor": tuple(map(int, teamAColor)),  # the color of teams a
+            "teamBColor": tuple(map(int, teamBColor)),  # the color of team b
+            "teamClasses": teamClasses,
+        }  # for every player ether a 0 or 1 or 2 is apppended.
+        # 0 is no player, 1 is team A, 2 is Team B
