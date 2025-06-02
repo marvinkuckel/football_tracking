@@ -32,6 +32,28 @@ class Filter:
         self.track_age += 1                             # increments age by one frame
         self.missed_frames += 1                         # increments the counter for missed detection match
 
+    def update(self, z, optical_flow):
+        """
+        Called when a track is matched to a detection.
+        Resets its box, updates its speed, and clears missed_frames.
+        """
+        # calculates displacement of the track
+        disp_x = z[0] - self.box[0]
+        disp_y = z[1] - self.box[1]
+        
+        # subtracts camera movement from displacement
+        cam_dx, cam_dy = optical_flow
+        obj_vx = disp_x - cam_dx
+        obj_vy = disp_y - cam_dy
+        
+        # stores tracks velocity
+        self.velocity = np.array([obj_vx, obj_vy])
+        
+        # updates box & ages
+        self.box = z.copy()         # takes over bounding box of new matched detection
+        self.track_age += 1         # increments age by one frame
+        self.missed_frames = 0      # resets the missed age, since the track was matched to a detection
+
 
 class Tracker:
     def __init__(self):
