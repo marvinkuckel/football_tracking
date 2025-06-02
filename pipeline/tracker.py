@@ -21,7 +21,16 @@ class Filter:
         self.hits = 0                   # how many consecutive matches have been found
         self.is_confirmed = False       # becomes True once hits ≥ birth_threshold
 
-    # TODO: Implement remaining funtionality for an individual track
+    def predict(self, optical_flow):
+        """
+        Called when a track isn't matched to a detection.
+        Predicts its new box by shifting it by the objects velocity and optical flow.
+        """
+        cam_dx, cam_dy = optical_flow                   # camera movement
+        self.box[0] += self.velocity[0] + cam_dx        # shifts x coordinate 
+        self.box[1] += self.velocity[1] + cam_dy        # shifts y coordinate
+        self.track_age += 1                             # increments age by one frame
+        self.missed_frames += 1                         # increments the counter for missed detection match
 
 
 class Tracker:
