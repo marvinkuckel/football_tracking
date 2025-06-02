@@ -124,6 +124,45 @@ class Tracker:
         else:
             iou = inter_area / union_area
             return iou
+        
+    def _build_output(self):
+        """   
+        Collects all confirmed tracks, caps them by age.
+        Returns required dict and ensures proper shapes:
+        numpy arrays for boxes and velocities, lists for ages, classes, and ids.
+        """
+        # select only confirmed tracks
+        confirmed = [f for f in self.filters if f.is_confirmed]
+
+        # cap to the oldest self.max_tracks
+        if len(confirmed) > self.max_tracks:
+            confirmed = sorted(                                     
+                confirmed, key=lambda f: f.track_age, reverse=True  # sort by track_age descending
+            )[: self.max_tracks]                                    # slice after max_tracks
+
+        # build lists
+        boxes = [f.box.copy() for f in confirmed]
+        velocities = [f.velocity.copy() for f in confirmed]
+        ages = [f.track_age for f in confirmed]  
+        classes = [f.cls for f in confirmed]  
+        ids = [f.id for f in confirmed]  
+
+        # ensures 2D array is returned, even if no confirmed tracks exist
+        if boxes:
+            tracks = np.array(boxes)                    
+            trackVelocities = np.array(velocities)      
+        else:
+            tracks          = np.zeros((0, 4), dtype=float)     
+            trackVelocities = np.zeros((0, 2), dtype=float)
+
+        # return dictionary
+        return {
+            "tracks": tracks,                       # Nx4 array
+            "trackVelocities": trackVelocities,     # Nx2 array
+            "trackAge": ages,                       # Nx1 list
+            "trackClasses": classes,                # Nx1 list
+            "trackIds": ids                         # Nx1 list
+        }
 
     def step(self, data):
         # for finding best matches with hungarian algorithm
