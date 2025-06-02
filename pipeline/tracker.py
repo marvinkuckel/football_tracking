@@ -126,34 +126,101 @@ class Tracker:
             return iou
 
     def step(self, data):
-        # TODO: Implement processing of a detection list
-        # The task of the tracker module is to identify (temporal) consistent tracks out of the given list of detections
-        # The tracker maintains a list of known tracks which is initially empty.
-        # The tracker then tries to associate all given detections from the detector to existing tracks. A meaningful metric needs to be defined
-        # to decide which detection should be associated with each track and which detections better stay unassigned.
-        # After the association step, one must handle there different cases:
-        #   1) Detections which have not beed associated with a track: For these, create a new filter class and initialize its state based on the detection
-        #   2) Tracks which have a detection: The state of these can be updated based on the associated detection
-        #   3) Tracks which have no detection: It makes sense to allow for a few missing frames, nonetheless it is still necessary to predict the
-        #      current filter state (e.g. based on the optical flow measurement and the object velocity). If too many frames are missing, the track can be deleted
+        # for finding best matches with hungarian algorithm
+        from scipy.optimize import linear_sum_assignment
 
-        # Note: You can access data["detections"] and data["classes"] to receive the current list of detections and their corresponding classes
-        # You must return a dictionary with the given fields:
-        #       "tracks":           A Nx4 NumPy Array containing a 4-dimensional state vector for each track. Similar to the detections,
-        #                           the track state containts the center point (X,Y) as well as the bounding box width and height (W, H)
-        #       "trackVelocities":  A Nx2 NumPy Array with an additional velocity estimate (in pixels per frame) for each track
-        #       "trackAge":         A Nx1 List with the track age (number of total frames this track exists). The track age starts at
-        #                           1 on track creation and increases monotonically by 1 per frame until the track is deleted.
-        #       "trackClasses":     A Nx1 List of classes associated with each track. Similar to detections, the following mapping must be used
-        #                               0: Ball
-        #                               1: GoalKeeper
-        #                               2: Player
-        #                               3: Referee
-        #       "trackIds":         A Nx1 List of unique IDs for each track. IDs must not be reused and be unique during the lifetime of the program.
-        return {
-            "tracks": None,
-            "trackVelocities": None,
-            "trackAge": None,
-            "trackClasses": None,
-            "trackIds": None,
-        }
+        detections = data["detections"]         # Nx4 array: x_center, y_center, width, height
+        detectionClasses = data["classes"]      # Nx1 array: 0=Ball, 1=GoalKeeper, 2=Player, 3=Referee
+        opticalFlow = data["opticalFlow"]       # 1x2 array: x_shift, y_shift
+
+        # case 1: no tracks, but detections exist
+        if len(self.filters) == 0 and len(data["detections"]) > 0:
+            # create new filter objects (pending tracks) for each detection
+            for det, cls in zip(detections, detectionClasses):
+                f = Filter(det, cls)
+                f.hits = 1
+                f.id = self.next_id
+                self.next_id += 1
+                self.filters.append(f)
+            return self._build_output()
+        
+        # case 2: no detections, but tracks exist
+        if len(data["detections"]) == 0 and len(self.filters) > 0:
+            # predict tracks new position and prunes tracks over the max threshold for missing age
+            survivors = []
+            for f in self.filters:
+                f.predict(opticalFlow)
+                # use birth_threshold for un-confirmed (to prune stale tracks earlier), death_threshold for confirmed
+                thresh = self.birth_threshold if not f.is_confirmed else self.death_threshold
+                if f.missed_frames <= thresh:
+                    survivors.append(f)
+            self.filters = survivors
+            return self._build_output()
+        
+        # case 3: tracks and detections exist
+        nt = len(self.filters)   # number of current tracks (pending and confirmed)
+        nd = len(detections)     # number of current detections
+
+        # cost matrix step 1: create numpy array in the shape of nt * nd
+        cost_matrix = np.zeros((nt, nd), dtype=float)
+
+        # cost matrix step 2: fill numpy array with calculated costs for track-detection pairs
+        for i, track in enumerate(self.filters):
+            for j, detection in enumerate(detections):
+                cost_matrix[i, j] = 1.0 - self.iou(track.box, detection)
+                    
+        # hungarian algorithm to get the best global matches (returns indieces)
+        track_indices, detection_indices = linear_sum_assignment(cost_matrix)
+
+        # decide on valid matches with IoU treshold
+        min_iou = 0.2
+        matches = []
+        all_track_ids = set(range(len(self.filters)))
+        all_det_ids = set(range(len(detections)))
+        matched_tracks = set()
+        matched_detections = set()
+
+        for ti, di in zip(track_indices, detection_indices):
+            # cost = 1 − iou
+            iou_val = 1.0 - cost_matrix[ti, di]
+            if iou_val >= min_iou:
+                matches.append((ti, di))
+                matched_tracks.add(ti)
+                matched_detections.add(di)
+            # otherwise treated as unmatched
+
+        # call update() for track at index ti with matched detection at index di
+        for ti, di in matches:
+            f = self.filters[ti]
+            f.update(detections[di], opticalFlow)       
+            # delayed-birth logic
+            if not f.is_confirmed:
+                f.hits += 1                             # adds one match to count
+                if f.hits >= self.birth_threshold:
+                    f.is_confirmed = True               # if match treshold is reached, track is born
+    
+        # build sets of unmatched tracks and detections
+        unmatched_tracks     = all_track_ids - matched_tracks       
+        unmatched_detections = all_det_ids - matched_detections
+
+        # call predict() for unmatched tracks
+        # remove in descending order so earlier deletes don't shift later indices
+        for ti in sorted(unmatched_tracks, reverse=True):
+            f = self.filters[ti]
+            f.predict(opticalFlow)
+            # use birth_threshold for un-confirmed (to prune stale tracks earlier), death_threshold for confirmed
+            thresh = self.birth_threshold if not f.is_confirmed else self.death_threshold
+            if f.missed_frames > thresh:
+                del self.filters[ti]                    # if threshold is exceeded, track is pruned
+
+        # create pending tracks for unmatched detections
+        for di in sorted(unmatched_detections):
+            det = detections[di]
+            cls = detectionClasses[di]
+            f = Filter(det, cls)
+            f.hits = 1
+            f.id = self.next_id
+            self.next_id += 1
+            self.filters.append(f)
+        
+        return self._build_output()
