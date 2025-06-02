@@ -86,6 +86,45 @@ class Tracker:
         """
         print("Module tracker stopped.")
 
+    def iou(self, bt, bd):
+        """
+        Computes the intersection over union, so the overlap, of a tracks and a detections bounding box for later matching.
+        bt, bd: [x_center, y_center, width, height]
+        Returns 0.0 <= IoU <= 1.0
+        """
+        # edges of tracks bounding box
+        bt_x_left = bt[0] - bt[2] / 2       # left edge x
+        bt_y_bottom = bt[1] - bt[3] / 2     # bottom edge y
+        bt_x_right = bt[0] + bt[2] / 2      # right edge x
+        bt_y_top = bt[1] + bt[3] / 2        # top edge y
+    
+        # edges of detections bounding box
+        bd_x_left = bd[0] - bd[2] / 2       # left edge x
+        bd_y_bottom = bd[1] - bd[3] / 2     # bottom edge y
+        bd_x_right = bd[0] + bd[2] / 2      # right edge x
+        bd_y_top = bd[1] + bd[3] / 2        # top edge y
+
+        # edges of intersection rectangle
+        inter_x_left = max(bt_x_left, bd_x_left)                # left edge x
+        inter_y_bottom = max(bt_y_bottom, bd_y_bottom)          # bottom edge y
+        inter_x_right = min(bt_x_right, bd_x_right)             # right edge x
+        inter_y_top = min(bt_y_top, bd_y_top)                   # top edge y
+
+        # intersection rectangle area
+        inter_area = max(0, inter_x_right - inter_x_left) * max(0, inter_y_top - inter_y_bottom)    # clamps at 0 if there is no intersection
+
+        # union area
+        bt_area = bt[2] * bt[3]                         # area of tracks bounding box
+        bd_area = bd[2] * bd[3]                         # area of detections bounding box
+        union_area = bt_area + bd_area - inter_area
+
+        # intersection over union
+        if union_area == 0:                             # avoids 0 division error if union == 0
+            return 0.0
+        else:
+            iou = inter_area / union_area
+            return iou
+
     def step(self, data):
         # TODO: Implement processing of a detection list
         # The task of the tracker module is to identify (temporal) consistent tracks out of the given list of detections
