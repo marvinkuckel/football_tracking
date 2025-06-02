@@ -1,8 +1,5 @@
 import numpy as np
 
-# Note: A typical tracker design implements a dedicated filter class for keeping the individual state of each track
-# The filter class represents the current state of the track (predicted position, size, velocity) as well as additional information (track age, class, missing updates, etc..)
-# The filter class is also responsible for assigning a unique ID to each newly formed track
 
 class Filter:
     """
@@ -56,16 +53,38 @@ class Filter:
 
 
 class Tracker:
+    """
+    Multi‐target tracker with simple birth/death logic and matching through IoU and hungarian data association.
+    Manages a list of Filter objects (tracks) and attempts to match incoming detections each frame.
+    Updates existing tracks, prunes stale ones, and spawns new pending tracks.
+    """
     def __init__(self):
-        self.name = "Tracker"  # Do not change the name of the module as otherwise recording replay would break!
+        """
+        Constructs Tracker object.
+        Note: Most initialization happens in start().
+        """
+        self.name = "Tracker"       # Do not change the name of the module as otherwise recording replay would break!
 
     def start(self, data):
-        # TODO: Implement start up procedure of the module
-        pass
+        """
+        Initializes the tracker with empty filter list, id counter and thresholds.
+        data is currently unused.
+        """
+        self.filters = []           # confirmed and pending filters
+        self.next_id = 1            # unique id counter
+
+        self.birth_threshold = 3    # needs n consecutive matches before track confirmation
+        self.death_threshold = 8    # prune after 8 misses
+        self.max_tracks = 25        # caps output tracks
+
+        print("Module tracker started.")
 
     def stop(self, data):
-        # TODO: Implement shut down procedure of the module
-        pass
+        """
+        Currently, no special shutdown procedure is needed.
+        data is currently unused.
+        """
+        print("Module tracker stopped.")
 
     def step(self, data):
         # TODO: Implement processing of a detection list
