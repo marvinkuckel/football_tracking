@@ -6,7 +6,7 @@ class Filter:
     Tracks a single object for multiple frames.
     Stores its bounding box, class, velocity, age, missed frames, and pending-birth state.
     """
-    def __init__(self, z, cls):
+    def __init__(self, z, cls, use_markow=False):
         self.box = z.copy()             # bounding box [x,y,w,h] with x,y = center coordinates, w,h = width & height
         self.cls = cls                  # detected class (0=ball, 1=goalkeeper, 2=player, 3=referee)
         self.velocity = np.zeros(2)     # velocity (dx, dy) vector
@@ -17,6 +17,10 @@ class Filter:
         # tracks only get birthed when they are matched x consecutive times 
         self.hits = 0                   # how many consecutive matches have been found
         self.is_confirmed = False       # becomes True once hits ≥ birth_threshold
+        
+        #markow 
+        self.use_markow = use_markow
+        self.markow_noise_std = 3.0      # standard deviation for markow noise in pixels
 
     def predict(self, optical_flow):
         """
@@ -24,8 +28,19 @@ class Filter:
         Predicts its new box by shifting it by the objects velocity and optical flow.
         """
         cam_dx, cam_dy = optical_flow                   # camera movement
-        self.box[0] += self.velocity[0] + cam_dx        # shifts x coordinate 
-        self.box[1] += self.velocity[1] + cam_dy        # shifts y coordinate
+        
+        if self.use_markow:
+            # stochastic prediction using markow model
+            predicted_box = self.markov_predict_position()
+            predicted_box[0] += cam_dx
+            predicted_box[1] += cam_dy
+            self.box = predicted_box
+            
+        else:
+            # Predicts new position by adding velocity and camera movement
+            self.box[0] += self.velocity[0] + cam_dx        # shifts x coordinate 
+            self.box[1] += self.velocity[1] + cam_dy        # shifts y coordinate
+            
         self.track_age += 1                             # increments age by one frame
         self.missed_frames += 1                         # increments the counter for missed detection match
 
@@ -50,6 +65,20 @@ class Filter:
         self.box = z.copy()         # takes over bounding box of new matched detection
         self.track_age += 1         # increments age by one frame
         self.missed_frames = 0      # resets the missed age, since the track was matched to a detection
+        
+    def markov_predict_position(self):
+        """
+        Returns a stochastic predicted position that is extended by a random component.
+        """
+        noise = np.random.normal(0, self.markov_noise_std, 2)
+        predicted_center = self.box[:2] + self.velocity + noise
+        return np.array([
+            predicted_center[0],
+            predicted_center[1],
+            self.box[2],
+            self.box[3]
+        ])
+
 
 
 class Tracker:
@@ -176,7 +205,7 @@ class Tracker:
         if len(self.filters) == 0 and len(data["detections"]) > 0:
             # create new filter objects (pending tracks) for each detection
             for det, cls in zip(detections, detectionClasses):
-                f = Filter(det, cls)
+                f = Filter(det, cls, use_markov=True)  # use_markow=True for stochastic prediction
                 f.hits = 1
                 f.id = self.next_id
                 self.next_id += 1
