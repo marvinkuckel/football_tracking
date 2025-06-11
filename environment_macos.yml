@@ -1,0 +1,17 @@
+name: football_macos
+channels:
+  - pytorch
+  - defaults
+dependencies:
+  - python=3.10
+  - numpy
+  - pytorch
+  - torchaudio
+  - torchvision
+  - scikit-learn
+  - pip
+  - pip:
+      - ultralytics
+      - opencv-python
+      - matplotlib
+      - black
