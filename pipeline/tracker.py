@@ -36,6 +36,14 @@ class Filter:
             [0, 0, 0,  1],
         ])
 
+        """
+        State transition matrix F:
+        Models the system dynamics assuming a constant velocity model.
+        It updates the state vector [x, y, vx, vy] from the previous time step to the current,
+        where position is updated by velocity multiplied by time step dt,
+        and velocity remains constant.
+        """
+
         self.H = np.array([  # observation matrix (we only observe position)
             [1, 0, 0, 0],
             [0, 1, 0, 0],
@@ -78,6 +86,60 @@ class Filter:
         self.missed_frames = 0  # number of consecutive frames without update
         self.hits = 1  # number of successful updates
         self.is_confirmed = False  # track is confirmed after a few hits
+    
+    def predict(self, optical_flow):
+        """
+        Predict the next state and covariance of the Kalman filter.
+        """
+        cam_dx, cam_dy = optical_flow  # unpack camera movement offsets
+        
+        self.x = self.F @ self.x  # predict state: x_k = F * x_{k-1}
+        self.x[0] += cam_dx  # compensate position x with camera motion
+        self.x[1] += cam_dy  # compensate position y with camera motion
+
+        self.P = self.F @ self.P @ self.F.T + self.Q  # predict covariance
+
+        self.track_age += 1  # increase track age
+        self.missed_frames += 1  # increase missed frames count (no measurement update yet)
+    
+    def update(self, z, optical_flow):
+        """
+        Update the Kalman filter state with a new measurement.
+        """
+        z_pos = np.array([z[0], z[1]])  # extract position from measurement
+
+        y = z_pos - (self.H @ self.x)  # innovation (measurement residual)
+        S = self.H @ self.P @ self.H.T + self.R  # innovation covariance
+        K = self.P @ self.H.T @ np.linalg.inv(S)  # Kalman gain
+
+        self.x = self.x + K @ y  # update state estimate
+        I = np.eye(4)  # identity matrix for covariance update
+        self.P = (I - K @ self.H) @ self.P  # update covariance estimate
+
+        self.box_w = z[2]  # update box width
+        self.box_h = z[3]  # update box height
+
+        self.missed_frames = 0  # reset missed frames
+        self.track_age += 1  # increase track age
+
+        if not self.is_confirmed:
+            self.hits += 1  # increase hits (measurement updates)
+            if self.hits >= 3:
+                self.is_confirmed = True  # confirm track after 3 hits
+
+    @property  # decorator: to allow access like an attribute without calling as a method
+    def box(self):
+        """
+        Returns the current bounding box estimate.
+        """
+        return np.array([self.x[0], self.x[1], self.box_w, self.box_h])
+
+    @property
+    def velocity(self):
+        """
+        Returns the current velocity estimate.
+        """
+        return self.x[2:4]
 
 class Tracker:
     def __init__(self):
