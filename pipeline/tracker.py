@@ -3,6 +3,7 @@
 # The filter class is also responsible for assigning a unique ID to each newly formed track
 
 import numpy as np
+from scipy.optimize import linear_sum_assignment  # for solving the assignment problem
 
 class Filter:
     """
@@ -164,7 +165,7 @@ class Tracker:
         """
         pass
 
-    def intersection_over_union(self, bt, bd):
+    def iou(self, bt, bd):
         """
         Compute Intersection over Union (IoU) of two bounding boxes to determine similarity.
         """
@@ -192,37 +193,104 @@ class Tracker:
         if union_area == 0:
             return 0.0  # avoid division by zero
         return inter_area / union_area  # return IoU value between 0 and 1
+    
+    def _build_output(self):
+        """
+        Build output for all confirmed tracks.
+        """
+        confirmed = [f for f in self.filters if f.is_confirmed]  # filter confirmed tracks
 
+        # limit output to max_tracks oldest tracks if necessary
+        if len(confirmed) > self.max_tracks:
+            confirmed = sorted(confirmed, key=lambda f: f.track_age, reverse=True)[:self.max_tracks]  # sort by age and take oldest tracks
+
+        boxes = [f.box.copy() for f in confirmed]
+        velocities = [f.velocity.copy() for f in confirmed]
+        ages = [f.track_age for f in confirmed]
+        classes = [f.cls for f in confirmed]
+        ids = [f.id for f in confirmed]
+
+        if boxes:  # check if there are any confirmed tracks
+            tracks = np.array(boxes)  # convert list of boxes to NumPy array
+            trackVelocities = np.array(velocities)  # convert list of velocities to NumPy array
+        else:  # no confirmed tracks
+            tracks = np.zeros((0, 4), dtype=float)  # empty array for tracks
+            trackVelocities = np.zeros((0, 2), dtype=float)  # empty array for velocities
+
+        return {  # return output dictionary
+            "tracks": tracks,
+            "trackVelocities": trackVelocities,
+            "trackAge": ages,
+            "trackClasses": classes,
+            "trackIds": ids
+        }
 
     def step(self, data):
-        # TODO: Implement processing of a detection list
-        # The task of the tracker module is to identify (temporal) consistent tracks out of the given list of detections
-        # The tracker maintains a list of known tracks which is initially empty.
-        # The tracker then tries to associate all given detections from the detector to existing tracks. A meaningful metric needs to be defined
-        # to decide which detection should be associated with each track and which detections better stay unassigned.
-        # After the association step, one must handle there different cases:
-        #   1) Detections which have not beed associated with a track: For these, create a new filter class and initialize its state based on the detection
-        #   2) Tracks which have a detection: The state of these can be updated based on the associated detection
-        #   3) Tracks which have no detection: It makes sense to allow for a few missing frames, nonetheless it is still necessary to predict the
-        #      current filter state (e.g. based on the optical flow measurement and the object velocity). If too many frames are missing, the track can be deleted
+        """
+        Main loop of the tracker.
+        This method processes the input data, updates the filters, and returns the current state of the tracker.
+        """
+        detections = data.get("detections", [])  # get detections from input data
+        detectionClasses = data.get("classes", [])  # get classes of detections
+        opticalFlow = data.get("opticalFlow", (0,0))  # get optical flow
 
-        # Note: You can access data["detections"] and data["classes"] to receive the current list of detections and their corresponding classes
-        # You must return a dictionary with the given fields:
-        #       "tracks":           A Nx4 NumPy Array containing a 4-dimensional state vector for each track. Similar to the detections,
-        #                           the track state containts the center point (X,Y) as well as the bounding box width and height (W, H)
-        #       "trackVelocities":  A Nx2 NumPy Array with an additional velocity estimate (in pixels per frame) for each track
-        #       "trackAge":         A Nx1 List with the track age (number of total frames this track exists). The track age starts at
-        #                           1 on track creation and increases monotonically by 1 per frame until the track is deleted.
-        #       "trackClasses":     A Nx1 List of classes associated with each track. Similar to detections, the following mapping must be used
-        #                               0: Ball
-        #                               1: GoalKeeper
-        #                               2: Player
-        #                               3: Referee
-        #       "trackIds":         A Nx1 List of unique IDs for each track. IDs must not be reused and be unique during the lifetime of the program.
-        return {
-            "tracks": None,
-            "trackVelocities": None,
-            "trackAge": None,
-            "trackClasses": None,
-            "trackIds": None,
-        }
+        if len(self.filters) == 0 and len(detections) > 0:  # if there are no filters...
+            for det, cls in zip(detections, detectionClasses):  # ... create new filters for each detection
+                f = Filter(det, cls)  # create a new filter
+                f.hits = 1
+                f.id = self.next_id
+                self.next_id += 1
+                self.filters.append(f)
+            return self._build_output()
+
+        if len(detections) == 0 and len(self.filters) > 0:  # if there are no detections...
+            survivors = []  # ... keep existing filters that are still alive
+            for f in self.filters:
+                f.predict(opticalFlow)
+                thresh = self.birth_threshold if not f.is_confirmed else self.death_threshold
+                if f.missed_frames <= thresh:
+                    survivors.append(f)  # only keep filters that are not dead
+            self.filters = survivors
+            return self._build_output()  # return current state of the tracker
+
+        cost_matrix = np.ones((len(self.filters), len(detections)), dtype=float)  # initialize cost matrix
+        for i, f in enumerate(self.filters):
+            for j, det in enumerate(detections):
+                cost_matrix[i, j] = 1.0 - self.iou(f.box, det)  # calculate IoU and fill cost matrix
+
+        row_ind, col_ind = linear_sum_assignment(cost_matrix)  # solve assignment problem using Hungarian algorithm
+
+        assigned_tracks = set()  # make a set of assigned tracks
+        assigned_detections = set()  # make a set of assigned detections
+
+        for r, c in zip(row_ind, col_ind):
+            if cost_matrix[r, c] < 0.7:  # IoU > 0.3 as assignment threshold
+                self.filters[r].update(detections[c], opticalFlow)
+                assigned_tracks.add(r)
+                assigned_detections.add(c)
+                if self.filters[r].id is None:
+                    self.filters[r].id = self.next_id
+                    self.next_id += 1
+            else:  # if IoU is too low...
+                self.filters[r].predict(opticalFlow)  # ... just predict the filter without updating
+
+        for i, f in enumerate(self.filters):  # iterate over all filters
+            if i not in assigned_tracks:  # if filter was not assigned to a detection...
+                f.predict(opticalFlow)  # ... just predict the filter without updating
+
+        for j, det in enumerate(detections):
+            if j not in assigned_detections:  # if detection was not assigned to a filter...
+                new_filter = Filter(det, detectionClasses[j])  # create a new filter
+                new_filter.hits = 1
+                new_filter.id = self.next_id
+                self.next_id += 1
+                self.filters.append(new_filter)  # add new filter to the list
+
+        survivors = []  # keep only filters that are still alive
+        for f in self.filters:
+            thresh = self.birth_threshold if not f.is_confirmed else self.death_threshold  # set threshold based on confirmation status
+            if f.missed_frames <= thresh:  # if filter is not dead...
+                survivors.append(f)  # ... keep it in the list
+        self.filters = survivors
+
+        return self._build_output()  # return current state of the tracker
