@@ -146,12 +146,53 @@ class Tracker:
         self.name = "Tracker"
 
     def start(self, data):
-        # TODO: Implement start up procedure of the module
-        pass
+        """
+        Initialize tracker state and parameters.
+        """
+        self.filters = []  # list of active Kalman filters (tracks)
+        self.next_id = 1  # next unique track ID
+
+        self.birth_threshold = 3  # frames needed to confirm a new track
+        self.death_threshold = 8  # frames without update before deleting a track
+        self.max_tracks = 25  # maximum number of active tracks
+
+        # print("Module tracker started.")
 
     def stop(self, data):
-        # TODO: Implement shut down procedure of the module
+        """
+        Cleanup or shutdown tracker module.
+        """
         pass
+
+    def intersection_over_union(self, bt, bd):
+        """
+        Compute Intersection over Union (IoU) of two bounding boxes to determine similarity.
+        """
+        bt_x_left = bt[0] - bt[2] / 2
+        bt_y_bottom = bt[1] - bt[3] / 2
+        bt_x_right = bt[0] + bt[2] / 2
+        bt_y_top = bt[1] + bt[3] / 2
+
+        bd_x_left = bd[0] - bd[2] / 2
+        bd_y_bottom = bd[1] - bd[3] / 2
+        bd_x_right = bd[0] + bd[2] / 2
+        bd_y_top = bd[1] + bd[3] / 2
+
+        inter_x_left = max(bt_x_left, bd_x_left)
+        inter_y_bottom = max(bt_y_bottom, bd_y_bottom)
+        inter_x_right = min(bt_x_right, bd_x_right)
+        inter_y_top = min(bt_y_top, bd_y_top)
+
+        inter_area = max(0, inter_x_right - inter_x_left) * max(0, inter_y_top - inter_y_bottom)  # calculate intersection area
+
+        bt_area = bt[2] * bt[3]
+        bd_area = bd[2] * bd[3]
+        union_area = bt_area + bd_area - inter_area
+
+        if union_area == 0:
+            return 0.0  # avoid division by zero
+        return inter_area / union_area  # return IoU value between 0 and 1
+
 
     def step(self, data):
         # TODO: Implement processing of a detection list
