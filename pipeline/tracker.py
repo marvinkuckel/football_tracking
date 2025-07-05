@@ -1,17 +1,87 @@
 # Note: A typical tracker design implements a dedicated filter class for keeping the individual state of each track
 # The filter class represents the current state of the track (predicted position, size, velocity) as well as additional information (track age, class, missing updates, etc..)
 # The filter class is also responsible for assigning a unique ID to each newly formed track
+
+import numpy as np
+
 class Filter:
-    def __init__(self, z, cls):
-        # TODO: Implement filter initializstion
-        pass
+    """
+    Kalman filter for tracking a single object in 2D.
+    State: [x, y, vx, vy]
+    Observation: [x, y]
+    """
 
-    # TODO: Implement remaining funtionality for an individual track
+    def __init__(self, z, cls, dt=1.0):
+        """
+        Initialize filter with first measurement.
 
+        Args:
+            z (array-like): Detection [x_center, y_center, width, height].
+            cls (any): Object class.
+            dt (float): Time step.
+        """
+        self.dt = dt  # time step between updates
+        self.cls = cls  # object class label
+        self.id = None  # unique track ID, to be assigned later
+
+        x, y = z[0], z[1]  # extract initial position from detection
+        self.x = np.array([x, y, 0, 0], dtype=float)  # initial state vector [x, y, vx, vy]
+
+        self.P = np.eye(4) * 500.0  # initial state covariance matrix with high uncertainty
+
+        self.F = np.array([  # state transition matrix (constant velocity model)
+            [1, 0, dt, 0],
+            [0, 1, 0, dt],
+            [0, 0, 1,  0],
+            [0, 0, 0,  1],
+        ])
+
+        self.H = np.array([  # observation matrix (we only observe position)
+            [1, 0, 0, 0],
+            [0, 1, 0, 0],
+        ])
+
+        """ 
+        Observation matrix H:
+        Maps the full state vector [x, y, vx, vy] to the observed measurement space [x, y].
+        Since only position (x, y) is directly measurable, H extracts these components.
+        This means measurements correspond to the position part of the state,
+        ignoring velocity components during the update step.
+        """
+
+        q = 1.0  # process noise scalar
+        self.Q = q * np.array([  # process noise covariance matrix
+            [dt**4/4,     0, dt**3/2,     0],
+            [0,     dt**4/4,     0, dt**3/2],
+            [dt**3/2,     0, dt**2,     0],
+            [0, dt**3/2,     0, dt**2],
+        ])
+
+        """
+        Process noise covariance matrix Q:
+        Models the uncertainty in the system dynamics, assuming a constant velocity motion model.
+        The entries depend on the time step dt and represent variance contributions from
+        acceleration noise affecting position and velocity.
+        The top-left 2x2 block relates to position noise,
+        the bottom-right 2x2 block relates to velocity noise,
+        and off-diagonal blocks capture correlation between position and velocity noise.
+        Multiplying by scalar q adjusts the overall process noise strength.
+        """
+
+        r = 10.0  # measurement noise scalar
+        self.R = np.eye(2) * r  # measurement noise covariance matrix
+
+        self.box_w = z[2]  # store width of bounding box
+        self.box_h = z[3]  # store height of bounding box
+
+        self.track_age = 1  # number of total frames since initialization
+        self.missed_frames = 0  # number of consecutive frames without update
+        self.hits = 1  # number of successful updates
+        self.is_confirmed = False  # track is confirmed after a few hits
 
 class Tracker:
     def __init__(self):
-        self.name = "Tracker"  # Do not change the name of the module as otherwise recording replay would break!
+        self.name = "Tracker"
 
     def start(self, data):
         # TODO: Implement start up procedure of the module
