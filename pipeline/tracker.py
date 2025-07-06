@@ -109,6 +109,7 @@ class Filter:
         """
         z_pos = np.array([z[0], z[1]])  # extract position from measurement
 
+        self.predict(optical_flow)
         y = z_pos - (self.H @ self.x)  # innovation (measurement residual)
         S = self.H @ self.P @ self.H.T + self.R  # innovation covariance
         K = self.P @ self.H.T @ np.linalg.inv(S)  # Kalman gain
@@ -121,7 +122,6 @@ class Filter:
         self.box_h = z[3]  # update box height
 
         self.missed_frames = 0  # reset missed frames
-        self.track_age += 1  # increase track age
 
         if not self.is_confirmed:
             self.hits += 1  # increase hits (measurement updates)
