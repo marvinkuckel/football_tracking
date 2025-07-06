@@ -125,8 +125,6 @@ class Filter:
 
         if not self.is_confirmed:
             self.hits += 1  # increase hits (measurement updates)
-            if self.hits >= 3:
-                self.is_confirmed = True  # confirm track after 3 hits
 
     @property  # decorator: to allow access like an attribute without calling as a method
     def box(self):
@@ -289,9 +287,16 @@ class Tracker:
 
         survivors = []  # keep only filters that are still alive
         for f in self.filters:
-            thresh = self.birth_threshold if not f.is_confirmed else self.death_threshold  # set threshold based on confirmation status
+            thresh = self.death_threshold if f.is_confirmed else self.birth_threshold  # set threshold based on confirmation status
+
             if f.missed_frames <= thresh:  # if filter is not dead...
                 survivors.append(f)  # ... keep it in the list
+
+            # confirm if minimum hits is reached
+            if not f.is_confirmed and f.hits >= self.birth_threshold:
+                f.is_confirmed = True
+
         self.filters = survivors
 
+        # return current state of the tracker
         return self._build_output()
