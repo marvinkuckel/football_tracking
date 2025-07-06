@@ -155,6 +155,7 @@ class Tracker:
 
         self.birth_threshold = 3  # frames needed to confirm a new track
         self.death_threshold = 8  # frames without update before deleting a track
+        self.iou_threshold = 0.3  # minimum iou to assign a detection to a track
         self.max_tracks = 25  # maximum number of active tracks
 
         # print("Module tracker started.")
@@ -193,7 +194,7 @@ class Tracker:
         if union_area == 0:
             return 0.0  # avoid division by zero
         return inter_area / union_area  # return IoU value between 0 and 1
-    
+
     def _build_output(self):
         """
         Build output for all confirmed tracks.
@@ -264,7 +265,7 @@ class Tracker:
         assigned_detections = set()  # make a set of assigned detections
 
         for r, c in zip(row_ind, col_ind):
-            if cost_matrix[r, c] < 0.7:  # IoU > 0.3 as assignment threshold
+            if cost_matrix[r, c] < (1 - self.iou_threshold):  # IoU > iou_threshold as assignment threshold
                 self.filters[r].update(detections[c], opticalFlow)
                 assigned_tracks.add(r)
                 assigned_detections.add(c)
@@ -293,4 +294,4 @@ class Tracker:
                 survivors.append(f)  # ... keep it in the list
         self.filters = survivors
 
-        return self._build_output()  # return current state of the tracker
+        return self._build_output()
