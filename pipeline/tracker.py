@@ -94,7 +94,6 @@ class Filter:
         """
         cam_dx, cam_dy = optical_flow  # unpack camera movement offsets
         
-        self.x = self.F @ self.x  # predict state: x_k = F * x_{k-1}
         self.x[0] += cam_dx  # compensate position x with camera motion
         self.x[1] += cam_dy  # compensate position y with camera motion
 
@@ -151,9 +150,10 @@ class Tracker:
         self.filters = []  # list of active Kalman filters (tracks)
         self.next_id = 1  # next unique track ID
 
-        self.birth_threshold = 3  # frames needed to confirm a new track
-        self.death_threshold = 8  # frames without update before deleting a track
-        self.iou_threshold = 0.3  # minimum iou to assign a detection to a track
+        self.birth_threshold = 5  # frames needed to confirm a new track
+        self.death_threshold = 15  # frames without update before deleting a track
+        self.output_threshold = 5  # if missing_frames is greater, dont return it as an active track, but dont delete it either
+        self.iou_threshold = 0.1  # minimum iou to assign a detection to a track
         self.max_tracks = 25  # maximum number of active tracks
 
         # print("Module tracker started.")
@@ -197,7 +197,7 @@ class Tracker:
         """
         Build output for all confirmed tracks.
         """
-        confirmed = [f for f in self.filters if f.is_confirmed]  # filter confirmed tracks
+        confirmed = [f for f in self.filters if f.is_confirmed and f.missed_frames <= self.output_threshold]  # filter confirmed tracks
 
         # limit output to max_tracks oldest tracks if necessary
         if len(confirmed) > self.max_tracks:
