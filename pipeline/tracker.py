@@ -25,45 +25,51 @@ class Filter:
         self.cls = cls  # object class label
         self.id = None  # unique track ID, to be assigned later
 
-        x, y = z[0], z[1]  # extract initial position from detection
-        self.x = np.array([x, y, 0, 0], dtype=float)  # initial state vector [x, y, vx, vy]
+        x, y, w, h = z  # extract initial position and size from detection
+        self.x = np.array([x, y, 0, 0, w, h], dtype=float)  # initial state vector [x, y, vx, vy, w, h]
 
-        self.P = np.eye(4) * 500.0  # initial state covariance matrix with high uncertainty
+        self.P = np.diag([5.0, 5.0, 50.0, 20.0, 10.0, 10.0])  # initial state covariance matrix with higher uncertainty for velocity (especially in x direction)
 
-        self.F = np.array([  # state transition matrix (constant velocity model)
-            [1, 0, dt, 0],
-            [0, 1, 0, dt],
-            [0, 0, 1,  0],
-            [0, 0, 0,  1],
+        self.F = np.array([  # state transition matrix (constant velocity model (+ width & height))
+            [1, 0, dt, 0, 0, 0],
+            [0, 1, 0, dt, 0, 0],
+            [0, 0, 1,  0, 0, 0],
+            [0, 0, 0,  1, 0, 0],
+            [0, 0, 0,  0, 1, 0],
+            [0, 0, 0,  0, 0, 1],
         ])
 
         """
         State transition matrix F:
         Models the system dynamics assuming a constant velocity model.
-        It updates the state vector [x, y, vx, vy] from the previous time step to the current,
+        It updates the state vector [x, y, vx, vy, w, h] from the previous time step to the current,
         where position is updated by velocity multiplied by time step dt,
-        and velocity remains constant.
+        and velocity as well as size remains constant.
         """
 
-        self.H = np.array([  # observation matrix (we only observe position)
-            [1, 0, 0, 0],
-            [0, 1, 0, 0],
+        self.H = np.array([  # observation matrix (we only observe position and size)
+            [1, 0, 0, 0, 0, 0],
+            [0, 1, 0, 0, 0, 0],
+            [0, 0, 0, 0, 1, 0],
+            [0, 0, 0, 0, 0, 1],
         ])
 
         """ 
         Observation matrix H:
-        Maps the full state vector [x, y, vx, vy] to the observed measurement space [x, y].
-        Since only position (x, y) is directly measurable, H extracts these components.
-        This means measurements correspond to the position part of the state,
+        Maps the full state vector [x, y, vx, vy, w, h] to the observed measurement space [x, y, w, h].
+        Since only position (x, y) and size (w, h) is directly measurable, H extracts these components.
+        This means measurements correspond to the position and size part of the state,
         ignoring velocity components during the update step.
         """
 
-        q = 1.0  # process noise scalar
+        q = np.diag([1.0, 1.0, 1.0, 1.0, 0.1, 0.1])  # process noise scalar
         self.Q = q * np.array([  # process noise covariance matrix
-            [dt**4/4,     0, dt**3/2,     0],
-            [0,     dt**4/4,     0, dt**3/2],
-            [dt**3/2,     0, dt**2,     0],
-            [0, dt**3/2,     0, dt**2],
+            [dt**4/4,       0, dt**3/2,       0, 0, 0],
+            [      0, dt**4/4,       0, dt**3/2, 0, 0],
+            [dt**3/2,       0,   dt**2,       0, 0, 0],
+            [      0, dt**3/2,       0,   dt**2, 0, 0],
+            [      0,       0,       0,       0, 1, 0],
+            [      0,       0,       0,       0, 0, 1],
         ])
 
         """
@@ -86,8 +92,8 @@ class Filter:
             [0, 0]
         ])
 
-        r = 10.0  # measurement noise scalar
-        self.R = np.eye(2) * r  # measurement noise covariance matrix
+        r = 50.0  # measurement noise scalar
+        self.R = np.eye(4) * r  # measurement noise covariance matrix
 
         self.box_w = z[2]  # store width of bounding box
         self.box_h = z[3]  # store height of bounding box
@@ -114,19 +120,14 @@ class Filter:
         """
         Update the Kalman filter state with a new measurement.
         """
-        z_pos = np.array([z[0], z[1]])  # extract position from measurement
-
         self.predict(optical_flow)
-        y = z_pos - (self.H @ self.x)  # innovation (measurement residual)
+        y = z - (self.H @ self.x)  # innovation (measurement residual)
         S = self.H @ self.P @ self.H.T + self.R  # innovation covariance
         K = self.P @ self.H.T @ np.linalg.inv(S)  # Kalman gain
 
         self.x = self.x + K @ y  # update state estimate
-        I = np.eye(4)  # identity matrix for covariance update
+        I = np.eye(6)  # identity matrix for covariance update
         self.P = (I - K @ self.H) @ self.P  # update covariance estimate
-
-        self.box_w = z[2]  # update box width
-        self.box_h = z[3]  # update box height
 
         self.missed_frames = 0  # reset missed frames
 
@@ -138,7 +139,7 @@ class Filter:
         """
         Returns the current bounding box estimate.
         """
-        return np.array([self.x[0], self.x[1], self.box_w, self.box_h])
+        return np.array([self.x[0], self.x[1], self.x[4], self.x[5]])
 
     @property
     def velocity(self):
@@ -161,7 +162,7 @@ class Tracker:
         self.birth_threshold = 5  # frames needed to confirm a new track
         self.death_threshold = 15  # frames without update before deleting a track
         self.output_threshold = 5  # if missing_frames is greater, dont return it as an active track, but dont delete it either
-        self.iou_threshold = 0.1  # minimum iou to assign a detection to a track
+        self.iou_threshold = 0.3  # minimum iou to assign a detection to a track
         self.max_tracks = 25  # maximum number of active tracks
 
         # print("Module tracker started.")
