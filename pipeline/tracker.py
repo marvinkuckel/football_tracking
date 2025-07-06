@@ -77,6 +77,15 @@ class Filter:
         Multiplying by scalar q adjusts the overall process noise strength.
         """
 
+        self.B = np.array([  # control-input model
+            [1, 0], 
+            [0, 1], 
+            [0, 0], 
+            [0, 0], 
+            [0, 0], 
+            [0, 0]
+        ])
+
         r = 10.0  # measurement noise scalar
         self.R = np.eye(2) * r  # measurement noise covariance matrix
 
@@ -87,21 +96,20 @@ class Filter:
         self.missed_frames = 0  # number of consecutive frames without update
         self.hits = 1  # number of successful updates
         self.is_confirmed = False  # track is confirmed after a few hits
-    
+
     def predict(self, optical_flow):
         """
         Predict the next state and covariance of the Kalman filter.
         """
-        cam_dx, cam_dy = optical_flow  # unpack camera movement offsets
-        
-        self.x[0] += cam_dx  # compensate position x with camera motion
-        self.x[1] += cam_dy  # compensate position y with camera motion
+        # control vector
+        u = np.array(optical_flow)  
 
+        self.x = self.F @ self.x + self.B @ u  # predict state: x_k = F * x_{k-1} + B * u_k
         self.P = self.F @ self.P @ self.F.T + self.Q  # predict covariance
 
         self.track_age += 1  # increase track age
         self.missed_frames += 1  # increase missed frames count (no measurement update yet)
-    
+
     def update(self, z, optical_flow):
         """
         Update the Kalman filter state with a new measurement.
