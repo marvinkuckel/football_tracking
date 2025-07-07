@@ -23,6 +23,8 @@ class Filter:
         """
         self.id = None  # unique track ID, to be assigned later
         self.cls = cls  # object class label
+        
+        self.max_speed = 20.0
 
         x, y, w, h = z  # extract initial position and size from detection
         self.x = np.array([x, y, 0, 0, 0, 0, w, h], dtype=float)  # initial state vector [x, y, vx, vy, ax, ay, w, h]
@@ -63,7 +65,7 @@ class Filter:
         ignoring velocity components during the update step.
         """
 
-        q_pos = 10.0  # process noise scalar
+        q_pos = 5.0  # process noise scalar
         q_box = 0.1
         self.Q = np.array([  # process noise covariance matrix
             [q_pos/20, 0,        q_pos/8, 0,       q_pos/6, 0,       0,     0],
@@ -98,7 +100,7 @@ class Filter:
             [0, 0]
         ])
 
-        r_pos = 5.0  # measurement noise scalar
+        r_pos = 10.0  # measurement noise scalar
         r_size = 50.0
         self.R = np.diag([r_pos, r_pos, r_size, r_size])  # measurement noise covariance matrix
 
@@ -125,7 +127,7 @@ class Filter:
         Update the Kalman filter state with a new measurement.<br>
         Predict method has to be called beforehand.
         """
-        
+
         y = z - (self.H @ self.x)  # innovation (measurement residual)
         S = self.H @ self.P @ self.H.T + self.R  # innovation covariance
         K = self.P @ self.H.T @ np.linalg.inv(S)  # Kalman gain
@@ -138,6 +140,16 @@ class Filter:
 
         if not self.is_confirmed:
             self.hits += 1  # increase hits (measurement updates)
+
+    def mahalanobis(self, detections) -> list:
+        """
+        Returns mahalanobis distanz for a list of detections
+        """
+        S = self.H @ self.P @ self.H.T + self.R
+        L = np.linalg.cholesky(S)
+        y = np.array(detections) - (self.H @ self.x)
+        z = np.linalg.solve(L, y.T).T
+        return np.sum(z**2, axis=1)
 
     @property  # decorator: to allow access like an attribute without calling as a method
     def box(self):
@@ -167,7 +179,7 @@ class Tracker:
         self.birth_threshold = 10  # frames needed to confirm a new track
         self.death_threshold = 20  # frames without update before deleting a track
         self.output_threshold = 5  # if missing_frames is greater, dont return it as an active track, but dont delete it either
-        self.iou_threshold = 0.0001  # minimum iou to assign a detection to a track
+        self.assignment_threshold = 10.0  # minimum iou to assign a detection to a track
         self.max_tracks = 25  # maximum number of active tracks
 
         # print("Module tracker started.")
@@ -270,8 +282,9 @@ class Tracker:
         cost_matrix = np.ones((len(self.filters), len(detections)), dtype=float)  # initialize cost matrix
         for i, f in enumerate(self.filters):
             f.predict(opticalFlow)
+            mahal = f.mahalanobis(detections)
             for j, det in enumerate(detections):
-                cost_matrix[i, j] = 1.0 - self.iou(f.box, det)  # calculate IoU and fill cost matrix
+                cost_matrix[i, j] = (1.0 - self.iou(f.box, det)) * mahal[j]  # calculate IoU and fill cost matrix
 
         row_ind, col_ind = linear_sum_assignment(cost_matrix)  # solve assignment problem using Hungarian algorithm
 
@@ -279,7 +292,7 @@ class Tracker:
         assigned_detections = set()  # make a set of assigned detections
 
         for r, c in zip(row_ind, col_ind):
-            if cost_matrix[r, c] < (1 - self.iou_threshold) and self.filters[r].cls == detectionClasses[c]:  # IoU > iou_threshold as assignment threshold
+            if cost_matrix[r, c] < self.assignment_threshold and self.filters[r].cls == detectionClasses[c]:  # IoU > iou_threshold as assignment threshold
                 self.filters[r].update(detections[c])
                 assigned_tracks.add(r)
                 assigned_detections.add(c)
@@ -288,6 +301,8 @@ class Tracker:
                     self.next_id += 1
 
         for j, det in enumerate(detections):
+            if max([self.iou(f.box, det) for f in self.filters]) > 0.5:
+                break
             if j not in assigned_detections:  # if detection was not assigned to a filter...
                 new_filter = Filter(det, detectionClasses[j])  # create a new filter
                 new_filter.hits = 1
