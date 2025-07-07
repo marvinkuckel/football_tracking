@@ -12,7 +12,7 @@ class Filter:
     Observation: [x, y]
     """
 
-    def __init__(self, z, cls, dt=1.0):
+    def __init__(self, z, cls):
         """
         Initialize filter with first measurement.
 
@@ -21,7 +21,6 @@ class Filter:
             cls (any): Object class.
             dt (float): Time step.
         """
-        self.dt = dt  # time step between updates
         self.id = None  # unique track ID, to be assigned later
         self.cls = cls  # object class label
 
@@ -114,7 +113,7 @@ class Filter:
         self.track_age += 1  # increase track age
         self.missed_frames += 1  # increase missed frames count (no measurement update yet)
 
-    def update(self, z, optical_flow):
+    def update(self, z):
         """
         Update the Kalman filter state with a new measurement.<br>
         Predict method has to be called beforehand.
