@@ -116,9 +116,10 @@ class Filter:
 
     def update(self, z, optical_flow):
         """
-        Update the Kalman filter state with a new measurement.
+        Update the Kalman filter state with a new measurement.<br>
+        Predict method has to be called beforehand.
         """
-        self.predict(optical_flow)
+        
         y = z - (self.H @ self.x)  # innovation (measurement residual)
         S = self.H @ self.P @ self.H.T + self.R  # innovation covariance
         K = self.P @ self.H.T @ np.linalg.inv(S)  # Kalman gain
@@ -259,8 +260,10 @@ class Tracker:
             self.filters = survivors
             return self._build_output()  # return current state of the tracker
 
+        # predict states of all filters of current frame and build cost matrix
         cost_matrix = np.ones((len(self.filters), len(detections)), dtype=float)  # initialize cost matrix
         for i, f in enumerate(self.filters):
+            f.predict(opticalFlow)
             for j, det in enumerate(detections):
                 cost_matrix[i, j] = 1.0 - self.iou(f.box, det)  # calculate IoU and fill cost matrix
 
@@ -270,19 +273,13 @@ class Tracker:
         assigned_detections = set()  # make a set of assigned detections
 
         for r, c in zip(row_ind, col_ind):
-                self.filters[r].update(detections[c], opticalFlow)
             if cost_matrix[r, c] < (1 - self.iou_threshold) and self.filters[r].cls == detectionClasses[c]:  # IoU > iou_threshold as assignment threshold
+                self.filters[r].update(detections[c])
                 assigned_tracks.add(r)
                 assigned_detections.add(c)
                 if self.filters[r].id is None:
                     self.filters[r].id = self.next_id
                     self.next_id += 1
-            else:  # if IoU is too low...
-                self.filters[r].predict(opticalFlow)  # ... just predict the filter without updating
-
-        for i, f in enumerate(self.filters):  # iterate over all filters
-            if i not in assigned_tracks:  # if filter was not assigned to a detection...
-                f.predict(opticalFlow)  # ... just predict the filter without updating
 
         for j, det in enumerate(detections):
             if j not in assigned_detections:  # if detection was not assigned to a filter...
