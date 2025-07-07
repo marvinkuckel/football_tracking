@@ -25,17 +25,19 @@ class Filter:
         self.cls = cls  # object class label
 
         x, y, w, h = z  # extract initial position and size from detection
-        self.x = np.array([x, y, 0, 0, w, h], dtype=float)  # initial state vector [x, y, vx, vy, w, h]
+        self.x = np.array([x, y, 0, 0, 0, 0, w, h], dtype=float)  # initial state vector [x, y, vx, vy, ax, ay, w, h]
 
-        self.P = np.diag([5.0, 5.0, 50.0, 20.0, 10.0, 10.0])  # initial state covariance matrix with higher uncertainty for velocity (especially in x direction)
+        self.P = np.eye(8) * 20.0  # initial state covariance matrix
 
         self.F = np.array([  # state transition matrix (constant velocity model (+ width & height))
-            [1, 0, dt, 0, 0, 0],
-            [0, 1, 0, dt, 0, 0],
-            [0, 0, 1,  0, 0, 0],
-            [0, 0, 0,  1, 0, 0],
-            [0, 0, 0,  0, 1, 0],
-            [0, 0, 0,  0, 0, 1],
+            [1, 0, 1, 0, 1/2, 0,   0, 0],
+            [0, 1, 0, 1, 0,   1/2, 0, 0],
+            [0, 0, 1, 0, 0,   0,   0, 0],
+            [0, 0, 0, 1, 0,   0,   0, 0],
+            [0, 0, 0, 0, 1,   0,   0, 0],
+            [0, 0, 0, 0, 0,   1,   0, 0],
+            [0, 0, 0, 0, 0,   0,   1, 0],
+            [0, 0, 0, 0, 0,   0,   0, 1],
         ])
 
         """
@@ -47,10 +49,10 @@ class Filter:
         """
 
         self.H = np.array([  # observation matrix (we only observe position and size)
-            [1, 0, 0, 0, 0, 0],
-            [0, 1, 0, 0, 0, 0],
-            [0, 0, 0, 0, 1, 0],
-            [0, 0, 0, 0, 0, 1],
+            [1, 0, 0, 0, 0, 0, 0, 0],
+            [0, 1, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 1, 0],
+            [0, 0, 0, 0, 0, 0, 0, 1],
         ])
 
         """ 
@@ -61,14 +63,17 @@ class Filter:
         ignoring velocity components during the update step.
         """
 
-        q = np.diag([1.0, 1.0, 1.0, 1.0, 0.1, 0.1])  # process noise scalar
-        self.Q = q * np.array([  # process noise covariance matrix
-            [dt**4/4,       0, dt**3/2,       0, 0, 0],
-            [      0, dt**4/4,       0, dt**3/2, 0, 0],
-            [dt**3/2,       0,   dt**2,       0, 0, 0],
-            [      0, dt**3/2,       0,   dt**2, 0, 0],
-            [      0,       0,       0,       0, 1, 0],
-            [      0,       0,       0,       0, 0, 1],
+        q_pos = 10.0  # process noise scalar
+        q_box = 0.1
+        self.Q = np.array([  # process noise covariance matrix
+            [q_pos/20, 0,        q_pos/8, 0,       q_pos/6, 0,       0,     0],
+            [0,        q_pos/20, 0,       q_pos/8, 0,       q_pos/6, 0,     0],
+            [q_pos/8,  0,        q_pos/3, 0,       q_pos/2, 0,       0,     0],
+            [0,        q_pos/8,  0,       q_pos/3, 0,       q_pos/2, 0,     0],
+            [q_pos/6,  0,        q_pos/2, 0,       q_pos,   0,       0,     0],
+            [0,        q_pos/6,  0,       q_pos/2, 0,       q_pos,   0,     0],
+            [0,        0,        0,       0,       0,       0,       q_box, 0],
+            [0,        0,        0,       0,       0,       0,       0,     q_box],
         ])
 
         """
@@ -88,12 +93,14 @@ class Filter:
             [0, 0], 
             [0, 0], 
             [0, 0], 
+            [0, 0], 
+            [0, 0], 
             [0, 0]
         ])
 
-        r = 50.0  # measurement noise scalar
-        self.R = np.eye(4) * r  # measurement noise covariance matrix
-
+        r_pos = 5.0  # measurement noise scalar
+        r_size = 50.0
+        self.R = np.diag([r_pos, r_pos, r_size, r_size])  # measurement noise covariance matrix
 
         self.track_age = 1  # number of total frames since initialization
         self.missed_frames = 0  # number of consecutive frames without update
@@ -124,7 +131,7 @@ class Filter:
         K = self.P @ self.H.T @ np.linalg.inv(S)  # Kalman gain
 
         self.x = self.x + K @ y  # update state estimate
-        I = np.eye(6)  # identity matrix for covariance update
+        I = np.eye(8)  # identity matrix for covariance update
         self.P = (I - K @ self.H) @ self.P  # update covariance estimate
 
         self.missed_frames = 0  # reset missed frames
@@ -137,7 +144,7 @@ class Filter:
         """
         Returns the current bounding box estimate.
         """
-        return np.array([self.x[0], self.x[1], self.x[4], self.x[5]])
+        return np.array([self.x[0], self.x[1], self.x[6], self.x[7]])
 
     @property
     def velocity(self):
@@ -157,10 +164,10 @@ class Tracker:
         self.filters = []  # list of active Kalman filters (tracks)
         self.next_id = 1  # next unique track ID
 
-        self.birth_threshold = 5  # frames needed to confirm a new track
-        self.death_threshold = 15  # frames without update before deleting a track
+        self.birth_threshold = 10  # frames needed to confirm a new track
+        self.death_threshold = 20  # frames without update before deleting a track
         self.output_threshold = 5  # if missing_frames is greater, dont return it as an active track, but dont delete it either
-        self.iou_threshold = 0.3  # minimum iou to assign a detection to a track
+        self.iou_threshold = 0.0001  # minimum iou to assign a detection to a track
         self.max_tracks = 25  # maximum number of active tracks
 
         # print("Module tracker started.")
