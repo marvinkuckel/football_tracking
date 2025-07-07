@@ -13,7 +13,7 @@ engine = Engine(
         VideoReader(targetSize=shape),
         recordReplayMultiplex(Detector(), RRPlexMode.REPLAY),
         recordReplayMultiplex(OpticalFlow(), RRPlexMode.BYPASS),
-        recordReplayMultiplex(Tracker(), RRPlexMode.REPLAY),
+        recordReplayMultiplex(Tracker(), RRPlexMode.BYPASS),
         recordReplayMultiplex(ShirtClassifier(), RRPlexMode.BYPASS),
         Display(historyBufferSize=1000),
     ],
