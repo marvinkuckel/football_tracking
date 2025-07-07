@@ -22,8 +22,8 @@ class Filter:
             dt (float): Time step.
         """
         self.dt = dt  # time step between updates
-        self.cls = cls  # object class label
         self.id = None  # unique track ID, to be assigned later
+        self.cls = cls  # object class label
 
         x, y, w, h = z  # extract initial position and size from detection
         self.x = np.array([x, y, 0, 0, w, h], dtype=float)  # initial state vector [x, y, vx, vy, w, h]
@@ -95,8 +95,6 @@ class Filter:
         r = 50.0  # measurement noise scalar
         self.R = np.eye(4) * r  # measurement noise covariance matrix
 
-        self.box_w = z[2]  # store width of bounding box
-        self.box_h = z[3]  # store height of bounding box
 
         self.track_age = 1  # number of total frames since initialization
         self.missed_frames = 0  # number of consecutive frames without update
@@ -272,8 +270,8 @@ class Tracker:
         assigned_detections = set()  # make a set of assigned detections
 
         for r, c in zip(row_ind, col_ind):
-            if cost_matrix[r, c] < (1 - self.iou_threshold):  # IoU > iou_threshold as assignment threshold
                 self.filters[r].update(detections[c], opticalFlow)
+            if cost_matrix[r, c] < (1 - self.iou_threshold) and self.filters[r].cls == detectionClasses[c]:  # IoU > iou_threshold as assignment threshold
                 assigned_tracks.add(r)
                 assigned_detections.add(c)
                 if self.filters[r].id is None:
