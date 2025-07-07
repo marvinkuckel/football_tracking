@@ -24,8 +24,6 @@ class Filter:
         self.id = None  # unique track ID, to be assigned later
         self.cls = cls  # object class label
         
-        self.max_speed = 20.0
-
         x, y, w, h = z  # extract initial position and size from detection
         self.x = np.array([x, y, 0, 0, 0, 0, w, h], dtype=float)  # initial state vector [x, y, vx, vy, ax, ay, w, h]
 
@@ -301,7 +299,7 @@ class Tracker:
                     self.next_id += 1
 
         for j, det in enumerate(detections):
-            if max([self.iou(f.box, det) for f in self.filters]) > 0.5:
+            if detectionClasses[j] != 0 and max([self.iou(f.box, det) for f in self.filters]) > 0.5:
                 break
             if j not in assigned_detections:  # if detection was not assigned to a filter...
                 new_filter = Filter(det, detectionClasses[j])  # create a new filter
