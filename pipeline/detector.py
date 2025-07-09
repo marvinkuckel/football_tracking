@@ -22,17 +22,29 @@ import numpy as np
 
 
 class Detector:
-    def __init__(self):
+    def __init__(self, weights="yolov8n-football.pt", imgsz=864, conf=0.2):
         """
         Directly loads the model on GPU, if available. 
         Otherwise falls back to CPU (much slower but still functional).
         """
         self.name = "Detector" 
-        self.device = "cuda" if torch.cuda.is_available() else "cpu" # checks if GPU is available
-        self.model = YOLO("yolov8n-football.pt").to(self.device) # loads weights
+        self.imgsz = imgsz  # higher resolution improves ball detection but decreases speed
+        self.conf = conf  # confidence threshold
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"  # checks if GPU is available
+        self.model = YOLO(weights).to(self.device)  # loads weights
         if self.device == "cuda":
             self.model.half()  # converts model weights to half precision (FP16) on GPU for faster inference
         self.model.model.eval()  # optimizes for inference by turning off training behavior (dropouts, batch normalization)
+
+        # warm up: runs dummy inferences to avoid first-frame lag
+        dummy = np.zeros((self.imgsz, self.imgsz, 3), dtype=np.uint8)  # creates dummy black image (HxWxC)
+        with torch.inference_mode():  # disables gradient tracking (since weights arent updated during inference)
+            if self.device == "cuda":
+                torch.cuda.synchronize()  
+            for _ in range(5):  # runs 5 dummy inferences
+                _ = self.model(dummy, imgsz=self.imgsz, conf=self.conf, verbose=False)
+            if self.device == "cuda":
+                torch.cuda.synchronize()  # ensures warm up is done before real inferences
 
         print(f"{self.name}: Model ready on {self.model.device}.")
 
@@ -52,19 +64,18 @@ class Detector:
         Runs YOLO detection on the current frame and returns bounding boxes and class IDs.
         Called once per frame.
         """
+        image = data["image"]  # gets current frame from input dict
 
-        image = data["image"]  # gets current frame
+        # fast inference in "no-training mode" (no gradient tracking)
+        with torch.inference_mode():
+            # calls the model directly (slightly faster)
+            results = self.model(
+                image,
+                imgsz=self.imgsz,  # image size specified in __init__
+                conf=self.conf,    # confidence threshold specified in __init__
+                verbose=False      
+            )[0]  # returns list of results (one per image), since we call per frame we only take the first
 
-        results = self.model.predict(
-            source=image,
-            device=self.device,
-            imgsz=864,  # high resolution improves ball detection
-            conf=0.2,  # confidence threshold
-            verbose=False,
-            retina_masks=False,  # not needed
-        )[
-            0
-        ]  # only first result in the list needed
 
         boxes_with_scores = sorted(
             [
