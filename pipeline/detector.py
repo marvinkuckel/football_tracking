@@ -92,28 +92,14 @@ class Detector:
 
         filtered_boxes   = boxes[mask]
         filtered_classes = classes[mask]
+        
+        # vectorized mask for shrinking ball bounding boxes
+        ball_idx = (filtered_classes == 0)  # bool mask for class ball
+        filtered_boxes[ball_idx, 2:] *= 0.7  # shrink width & height by 30%
 
-        # post-processing using only filtered results
-        detections = []
-        det_classes = []
-
-        for box, cls_id in zip(filtered_boxes, filtered_classes):
-            x_center, y_center, width, height = box.tolist()  # unpacks bounding box center coordinates width, height
-            if cls_id == 0:  # shrinks ball box by 30%
-                width *= 0.7
-                height *= 0.7
-            detections.append([x_center, y_center, width, height])  # adds bounding box to list
-            det_classes.append([cls_id])  # adds corresponding class id
-
-        # converts valid detections back to np arrays
-        if detections:
-            detections = np.array(detections).astype(np.float32)
-            det_classes = np.array(det_classes).astype(np.int32)
-
-        # creates arrays filled with 0s to avoid errors when no detections are found
-        else:
-            detections = np.zeros((0, 4), dtype=np.float32)
-            det_classes = np.zeros((0, 1), dtype=np.int32)
+        # prepares outputs in required shapes
+        detections = filtered_boxes.astype(np.float32)
+        det_classes = filtered_classes.reshape(-1, 1).astype(np.int32)  # already handles correct output in case of no detections
 
 
         return {"detections": detections, "classes": det_classes}
