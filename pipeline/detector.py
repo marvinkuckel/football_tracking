@@ -76,7 +76,12 @@ class Detector:
                 verbose=False      
             )[0]  # returns list of results (one per image), since we call per frame we only take the first
 
+        # new: converts detection tensors to numpy arrays
+        new_boxes   = results.boxes.xywh.cpu().numpy()  # (N, 4): coordinates & size for each box (x_center, y_center, width, height)
+        new_classes = results.boxes.cls.cpu().numpy().astype(int)  # (N,): class ids as int
+        new_confs   = results.boxes.conf.cpu().numpy()  # (N,): confidence for each box as float
 
+        # old logic
         boxes_with_scores = sorted(
             [
                 (box, float(box.conf.item())) for box in results.boxes
