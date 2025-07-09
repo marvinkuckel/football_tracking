@@ -76,70 +76,45 @@ class Detector:
                 verbose=False      
             )[0]  # returns list of results (one per image), since we call per frame we only take the first
 
-        # new: converts detection tensors to numpy arrays
-        new_boxes   = results.boxes.xywh.cpu().numpy()  # (N, 4): coordinates & size for each box (x_center, y_center, width, height)
-        new_classes = results.boxes.cls.cpu().numpy().astype(int)  # (N,): class ids as int
-        new_confs   = results.boxes.conf.cpu().numpy()  # (N,): confidence for each box as float
+        # converts detection tensors to numpy arrays
+        boxes   = results.boxes.xywh.cpu().numpy()  # (N, 4): coordinates & size for each box (x_center, y_center, width, height)
+        classes = results.boxes.cls.cpu().numpy().astype(int)  # (N,): class ids as int (0=ball, 1=goalkeeper, 2=player, 3=referee)
+        confs   = results.boxes.conf.cpu().numpy()  # (N,): confidence for each box as float (between 0.0 and 1.0)
 
-        # old logic
-        boxes_with_scores = sorted(
-            [
-                (box, float(box.conf.item())) for box in results.boxes
-            ],  # pairs box with confidence score
-            key=lambda x: x[1],  # sorts by confidence
-            reverse=True,  # highest confidence first
-        )
+        # bool mask for valid detections
+        valid_classes = (classes >= 0) & (classes <= 3)  # only keeps relevant classes (0-3)
+        # bool mask for class specific confidence thresholds
+        ball_mask = (classes == 0) & (confs >= 0.2)  # lower confidence for ball, because detection is harder
+        other_mask = (classes != 0) & (confs >= 0.4)  # higher confidence for player, goalkeeper, referee
 
+        # combines everything into a single mask
+        mask = valid_classes & (ball_mask | other_mask)
+
+        filtered_boxes   = boxes[mask]
+        filtered_classes = classes[mask]
+
+        # post-processing using only filtered results
         detections = []
-        classes = []
+        det_classes = []
 
-        VALID_CLASSES = {
-            0,
-            1,
-            2,
-            3,
-        }  # specifies relevant classes in case model changes in future
-
-        for box, score in boxes_with_scores:
-            # each box contains one detection result from YOLO (coordinates, class, confidence)
-
-            cls_id = int(
-                box.cls.item()
-            )  # predicted class id (0 = ball, 1 = goalkeeper, 2 = player, 3 = referee)
-
-            if cls_id not in VALID_CLASSES:
-                continue  # skip other classes, if there are any
-
-            # class specific thresholds
-            if cls_id == 0:  # ball
-                if score < 0.2:  # lower confidence, because detection is harder
-                    continue
-            else:  # player, goalkeeper, referee
-                if score < 0.4:
-                    continue
-
-            x_center, y_center, width, height = box.xywh[
-                0
-            ].tolist()  # bounding box (center coordinates width, height)
-
-            if cls_id == 0:  # shrinks bounding box of ball class by 30%
+        for box, cls_id in zip(filtered_boxes, filtered_classes):
+            x_center, y_center, width, height = box.tolist()  # unpacks bounding box center coordinates width, height
+            if cls_id == 0:  # shrinks ball box by 30%
                 width *= 0.7
                 height *= 0.7
+            detections.append([x_center, y_center, width, height])  # adds bounding box to list
+            det_classes.append([cls_id])  # adds corresponding class id
 
-            detections.append(
-                [x_center, y_center, width, height]
-            )  # adds bounding box to list
-            classes.append([cls_id])  # adds corresponding class id
-
-        # converts valid detections to np arrays
+        # converts valid detections back to np arrays
         if detections:
-            detections = np.array(detections).astype(
-                np.float32
-            )  # x_center, y_center, width, height
-            classes = np.array(classes).astype(np.int32)  # class_id
-        else:
-            # returns empty arrays  if no detections are found
-            detections = np.zeros((0, 4), dtype=np.float32)
-            classes = np.zeros((0, 1), dtype=np.int32)
+            detections = np.array(detections).astype(np.float32)
+            det_classes = np.array(det_classes).astype(np.int32)
 
-        return {"detections": detections, "classes": classes}
+        # creates arrays filled with 0s to avoid errors when no detections are found
+        else:
+            detections = np.zeros((0, 4), dtype=np.float32)
+            det_classes = np.zeros((0, 1), dtype=np.int32)
+
+
+        return {"detections": detections, "classes": det_classes}
+
