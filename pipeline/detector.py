@@ -32,6 +32,7 @@ class Detector:
         self.model = YOLO("yolov8n-football.pt").to(self.device) # loads weights
         if self.device == "cuda":
             self.model.half()  # converts model weights to half precision (FP16) on GPU for faster inference
+        self.model.model.eval()  # optimizes for inference by turning off training behavior (dropouts, batch normalization)
 
         print(f"{self.name}: Model ready on {self.model.device}.")
 
