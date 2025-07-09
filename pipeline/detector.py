@@ -30,6 +30,8 @@ class Detector:
         self.name = "Detector" 
         self.device = "cuda" if torch.cuda.is_available() else "cpu" # checks if GPU is available
         self.model = YOLO("yolov8n-football.pt").to(self.device) # loads weights
+        if self.device == "cuda":
+            self.model.half()  # converts model weights to half precision (FP16) on GPU for faster inference
 
         print(f"{self.name}: Model ready on {self.model.device}.")
 
