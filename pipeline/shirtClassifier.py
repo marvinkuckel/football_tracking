@@ -26,7 +26,7 @@ class ShirtClassifier:
         #       "teamClasses"       A list with an integer class for each track according to the following mapping:
         #           0: Team not decided or not a player (e.g. ball, goal keeper, referee)
         #           1: Player belongs to team A
-        #           2: Player belongs to team B
+        #           -1: Player belongs to team B
 
         # Accessing the image and tracks
         image = data["image"]
@@ -52,9 +52,7 @@ class ShirtClassifier:
             # w and h is the width and height of the box
             x, y, w, h = tracks[player]  # find the box for every player in players
             x1, y1 = int(x - w / 2), int(y - h / 2)  # the corner left top of the box
-            x2, y2 = int(x + w / 2), int(
-                y + h / 2
-            )  # the corner right bottom of the box
+            x2, y2 = int(x + w / 2), int( y + h / 2 )  # the corner right bottom of the box
             shirt_region = image[y1:y2, x1:x2]  # here i need cv2
             # skipping/continueing when box is not in the picture
             if shirt_region.size == 0:
@@ -108,20 +106,15 @@ class ShirtClassifier:
                 avg_color = shirt_region.mean(axis=(0, 1))
 
                 # to check, which cluster/Team/color the player is we need to see, if the color of the player (avg_color) is closer to teamA or teamB
-                distA = np.linalg.norm(
-                    avg_color - teamAColor
-                )  # calculate the distance to the teamA color
-                distB = np.linalg.norm(
-                    avg_color - teamBColor
-                )  # calculate the distance to the teamB color
-                teamClasses.append(
-                    1 if distA < distB else 2
-                )  # check which distance is smaller and but the player in that team
+                distA = np.linalg.norm( avg_color - teamAColor )  # calculate the distance to the teamA color
+                distB = np.linalg.norm( avg_color - teamBColor )  # calculate the distance to the teamB color
+                teamClasses.append( 1 if distA < distB else -1 )  # check which distance is smaller and but the player in that team
 
         # returning Teams and their colors ind whole numbers:
         return {
             "teamAColor": tuple(map(int, teamAColor)),  # the color of teams a
             "teamBColor": tuple(map(int, teamBColor)),  # the color of team b
             "teamClasses": teamClasses,
-        }  # for every player ether a 0 or 1 or 2 is apppended.
-        # 0 is no player, 1 is team A, 2 is Team B
+        }  # for every player ether a 0 or 1 or -1 is apppended.
+        # 0 is no player, 1 is team A, -1 is Team B
+4
