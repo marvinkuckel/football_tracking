@@ -6,11 +6,14 @@ import numpy as np
 from scipy.optimize import linear_sum_assignment  # for solving the assignment problem
 
 class Filter:
-    """
-    Kalman filter for tracking a single object in 2D.
-    State: [x, y, vx, vy]
-    Observation: [x, y]
-    """
+    def __init__(self, id, z, cls, current_optical_flow):
+        # TODO: Implement filter initializstion
+        self.id = id
+        self.cls = cls
+        self.box = z
+        self.velocity = current_optical_flow
+        self.track_age = 0
+        self.missing_age = 0
 
     def __init__(self, z, cls):
         """
@@ -27,7 +30,7 @@ class Filter:
         x, y, w, h = z  # extract initial position and size from detection
         self.x = np.array([x, y, 0, 0, 0, 0, w, h], dtype=float)  # initial state vector [x, y, vx, vy, ax, ay, w, h]
 
-        self.P = np.eye(8) * 20.0  # initial state covariance matrix
+        self.P = np.diag([5.0, 5.0, 50.0, 59.0, 100.0, 100.0, 5.0, 5.0])  # initial state covariance matrix
 
         self.F = np.array([  # state transition matrix (constant velocity model (+ width & height))
             [1, 0, 1, 0, 1/2, 0,   0, 0],
@@ -63,15 +66,25 @@ class Filter:
         ignoring velocity components during the update step.
         """
 
-        q_pos = 5.0  # process noise scalar
-        q_box = 0.1
+        # if object is a ball, give it higher uncertainty
+        if cls == 0:
+            q_pos = 20.0
+            q_vel = 15.0
+            q_acc = 10.0
+            q_box = 5.0
+        else: 
+            q_pos = 8.0
+            q_vel = 4.0
+            q_acc = 2.0
+            q_box = 0.2
+            
         self.Q = np.array([  # process noise covariance matrix
             [q_pos/20, 0,        q_pos/8, 0,       q_pos/6, 0,       0,     0],
             [0,        q_pos/20, 0,       q_pos/8, 0,       q_pos/6, 0,     0],
-            [q_pos/8,  0,        q_pos/3, 0,       q_pos/2, 0,       0,     0],
-            [0,        q_pos/8,  0,       q_pos/3, 0,       q_pos/2, 0,     0],
-            [q_pos/6,  0,        q_pos/2, 0,       q_pos,   0,       0,     0],
-            [0,        q_pos/6,  0,       q_pos/2, 0,       q_pos,   0,     0],
+            [q_pos/8,  0,        q_vel/3, 0,       q_vel/2, 0,       0,     0],
+            [0,        q_pos/8,  0,       q_vel/3, 0,       q_vel/2, 0,     0],
+            [q_pos/6,  0,        q_vel/2, 0,       q_acc,   0,       0,     0],
+            [0,        q_pos/6,  0,       q_vel/2, 0,       q_acc,   0,     0],
             [0,        0,        0,       0,       0,       0,       q_box, 0],
             [0,        0,        0,       0,       0,       0,       0,     q_box],
         ])
@@ -98,8 +111,13 @@ class Filter:
             [0, 0]
         ])
 
-        r_pos = 10.0  # measurement noise scalar
-        r_size = 50.0
+        if cls == 0:
+            r_pos = 15.0
+            r_size = 5.0
+        else:
+            r_pos = 10.0
+            r_size = 20.0
+            
         self.R = np.diag([r_pos, r_pos, r_size, r_size])  # measurement noise covariance matrix
 
         self.track_age = 1  # number of total frames since initialization
@@ -282,7 +300,11 @@ class Tracker:
             f.predict(opticalFlow)
             mahal = f.mahalanobis(detections)
             for j, det in enumerate(detections):
-                cost_matrix[i, j] = (1.0 - self.iou(f.box, det)) * mahal[j]  # calculate IoU and fill cost matrix
+                # euclidean distance
+                if ((f.box[0] - det[0])**2 + (f.box[1] - det[1])**4)**0.5 < 15 and max([self.iou(fil.box, det) for fil in self.filters if fil is not f]) < 0.7:
+                    cost_matrix[i, j] = (1.0 - self.iou(f.box, det)) * mahal[j]  # calculate IoU and fill cost matrix
+                else:
+                    cost_matrix[i, j] = 1000
 
         row_ind, col_ind = linear_sum_assignment(cost_matrix)  # solve assignment problem using Hungarian algorithm
 
@@ -290,7 +312,8 @@ class Tracker:
         assigned_detections = set()  # make a set of assigned detections
 
         for r, c in zip(row_ind, col_ind):
-            if cost_matrix[r, c] < self.assignment_threshold and self.filters[r].cls == detectionClasses[c]:  # IoU > iou_threshold as assignment threshold
+            thresh = self.assignment_threshold if self.filters[r].cls != 0 else 100
+            if cost_matrix[r, c] < thresh and self.filters[r].cls == detectionClasses[c]:  # IoU > iou_threshold as assignment threshold
                 self.filters[r].update(detections[c])
                 assigned_tracks.add(r)
                 assigned_detections.add(c)
