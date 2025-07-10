@@ -51,16 +51,25 @@ class ShirtClassifier:
             # x and y is the center of the Box
             # w and h is the width and height of the box
             x, y, w, h = tracks[player]  # find the box for every player in players
-            x1, y1 = int(x - w / 2), int(y - h / 2)  # the corner left top of the box
-            x2, y2 = int(x + w / 2), int( y + h / 2 )  # the corner right bottom of the box
+            
+            # Calculate reduced shirt region (middle 60% width, 30% height)
+            x1 = int(x - w * 0.3)
+            x2 = int(x + w * 0.3)
+            y1 = int(y - h * 0.15)
+            y2 = int(y + h * 0.15)
+
+            # Ensure coordinates stay within image bounds
+            x1, y1 = max(x1, 0), max(y1, 0)
+            x2, y2 = min(x2, image.shape[1]), min(y2, image.shape[0])
+            
             shirt_region = image[y1:y2, x1:x2]  # here i need cv2
+            
             # skipping/continueing when box is not in the picture
             if shirt_region.size == 0:
                 continue
+            
             # calculate the average color of the shirt region
-            avg_color = shirt_region.mean(
-                axis=(0, 1)
-            )  # BGR  -> output like this: [120, 50, 200]
+            avg_color = shirt_region.mean( axis=(0, 1) )  # BGR  -> output like this: [120, 50, 200]
             colors.append(avg_color)  # put the average color of the shirt into the list
             # colors should be a list of tuples with the average color of every player.
             # for example there will be many blue and many red colors.
@@ -91,13 +100,18 @@ class ShirtClassifier:
                 teamClasses.append(0)  # we dont care about these
             else:
                 x, y, w, h = tracks[player]  # the coordinates of the box
-                x1, y1 = int(x - w / 2), int(
-                    y - h / 2
-                )  # the corner left top of the box
-                x2, y2 = int(x + w / 2), int(
-                    y + h / 2
-                )  # the corner right bottom of the box
+               
+               # Same reduced shirt region as above
+                x1 = int(x - w * 0.3)
+                x2 = int(x + w * 0.3)
+                y1 = int(y - h * 0.15)
+                y2 = int(y + h * 0.15)
+
+                x1, y1 = max(x1, 0), max(y1, 0)
+                x2, y2 = min(x2, image.shape[1]), min(y2, image.shape[0])
+
                 shirt_region = image[y1:y2, x1:x2]  # here i need cv2
+                
                 # skipping/continueing when box is not in the picture
                 if shirt_region.size == 0:
                     teamClasses.append(0)
