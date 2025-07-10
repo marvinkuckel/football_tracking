@@ -9,32 +9,40 @@ class OpticalFlow:
         self.pre_points = None
 
     def start(self, data):
+        """
+        Initialize/reset previous image and points on start
+        """
         self.pre_image = None
         self.pre_points = None
 
     def stop(self, data):
+        """
+        Cleanup on stopping the module: release stored data
+        """
         self.pre_image = None
         self.pre_points = None
 
     def step(self, data):
-        # TODO: Implement processing of a single frame
-        frame = data["image"]
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        """
+        Process a single frame/image
+        """
+        frame = data["image"]  # current image frame
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)  # convert to grayscale
 
-        if self.pre_image is None:
-            self.pre_image = gray
-            return {"opticalFlow": np.array([0.0, 0.0], dtype=np.float32)}
+        if self.pre_image is None:  # if no previous image exists...
+            self.pre_image = gray  # ... set the current image as reference
+            return {"opticalFlow": np.array([0.0, 0.0], dtype=np.float32)}  # return zero flow if no previous image exists
 
-        if self.pre_points is None:
-            self.pre_points = cv2.goodFeaturesToTrack(
-                self.pre_image,  # Shi-Tomasi
-                maxCorners=100,
-                qualityLevel=0.3,
-                minDistance=7,
-                blockSize=7,
+        if self.pre_points is None:  # if no previous points exist...
+            self.pre_points = cv2.goodFeaturesToTrack(  # detect corners (good features) in the previous image, Shi-Tomasi
+                self.pre_image,  # previous image
+                maxCorners=100,  # maximum number of corners to return/points to find
+                qualityLevel=0.3,  # minimal acceptable quality of corners
+                minDistance=7,  # minimal distance between corners
+                blockSize=7,  # size of the block for computing covariance matrix
             )
 
-        next_points, status, _ = cv2.calcOpticalFlowPyrLK(
+        next_points, status, _ = cv2.calcOpticalFlowPyrLK(  # Lukas-Kanade
             self.pre_image, gray, self.pre_points, None
         )
 
@@ -43,14 +51,14 @@ class OpticalFlow:
 
         if len(good_old) > 0:  # If there are points to track...
             flow = good_new - good_old  # vector flow
-            mean_flow = np.mean(flow, axis=0)
-        else:
-            mean_flow = np.array([0.0, 0.0])
+            mean_flow = np.mean(flow, axis=0)  # average flow vector
+        else:  # If no points are tracked...
+            mean_flow = np.array([0.0, 0.0])  # ... set flow to zero
 
-        self.pre_image = gray
+        self.pre_image = gray  # update the previous image to the current one
 
         self.pre_points = (
-            good_new.reshape(-1, 1, 2) if len(good_new) > 0 else None
+            good_new.reshape(-1, 1, 2) if len(good_new) > 0 else None  # reshape for OpenCV
         )  # Reset
 
         for i, (new, old) in enumerate(
@@ -66,8 +74,6 @@ class OpticalFlow:
                 2,
                 tipLength=0.05,
             )  # Arrowed line
-
-        cv2.waitKey(1)
 
         # The task of the optical flow module is to determine the overall avergae pixel shift between this and the previous image.
         # You
