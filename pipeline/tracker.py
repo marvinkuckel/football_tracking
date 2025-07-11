@@ -303,8 +303,8 @@ class Tracker:
             f.predict(opticalFlow)
             mahal = f.mahalanobis(detections)
             for j, det in enumerate(detections):
-                # euclidean distance
-                if ((f.box[0] - det[0])**2 + (f.box[1] - det[1])**4)**0.5 < 15 and max([self.iou(fil.box, det) for fil in self.filters if fil is not f]) < 0.7:
+                # euclidean gate
+                if ((f.box[0] - det[0])**2 + (f.box[1] - det[1])**2)**0.5 < 15 and max([self.iou(fil.box, det) for fil in self.filters if fil is not f]) < 0.7:
                     cost_matrix[i, j] = (1.0 - self.iou(f.box, det)) * mahal[j]  # calculate IoU and fill cost matrix
                 else:
                     cost_matrix[i, j] = 1000
@@ -325,8 +325,9 @@ class Tracker:
                     self.next_id += 1
 
         for j, det in enumerate(detections):
+            # if detection is non-ball but overlaps existing, skip only this one
             if detectionClasses[j] != 0 and max([self.iou(f.box, det) for f in self.filters]) > 0.5:
-                break
+                continue
             if j not in assigned_detections:  # if detection was not assigned to a filter...
                 new_filter = Filter(det, detectionClasses[j])  # create a new filter
                 new_filter.hits = 1
@@ -350,8 +351,9 @@ class Tracker:
                 survivors.append(f)  # ... keep it in the list
 
             # confirm if minimum hits is reached
-            if not f.is_confirmed and f.hits >= self.birth_threshold:
+            if not f.is_confirmed and f.hits >= birth_thr:
                 f.is_confirmed = True
+
 
         self.filters = survivors
 
