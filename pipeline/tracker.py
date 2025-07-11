@@ -6,15 +6,6 @@ import numpy as np
 from scipy.optimize import linear_sum_assignment  # for solving the assignment problem
 
 class Filter:
-    def __init__(self, id, z, cls, current_optical_flow):
-        # TODO: Implement filter initializstion
-        self.id = id
-        self.cls = cls
-        self.box = z
-        self.velocity = current_optical_flow
-        self.track_age = 0
-        self.missing_age = 0
-
     def __init__(self, z, cls):
         """
         Initialize filter with first measurement.
