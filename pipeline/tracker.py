@@ -175,25 +175,30 @@ class Filter:
 class Tracker:
     def __init__(self):
         self.name = "Tracker"
-
-    def start(self, data):
-        """
-        Initialize tracker state and parameters.
-        """
+        
         self.filters = []  # list of active Kalman filters (tracks)
         self.next_id = 1  # next unique track ID
 
-        self.birth_threshold = 10  # frames needed to confirm a new track
-        self.death_threshold = 20  # frames without update before deleting a track
-        self.output_threshold = 5  # if missing_frames is greater, dont return it as an active track, but dont delete it either
+        # separate birth/death for ball vs others
+        self.ball_birth_threshold = 3   # frames needed to confirm a new ball track
+        self.ball_death_threshold = 5  # frames without update before deleting a ball track
+        self.birth_threshold = 10       # frames needed to confirm a new track
+        self.death_threshold = 20       # frames without update before deleting a track
+        self.output_threshold = 5       # if missing_frames is greater, dont return it as an active track, but dont delete it either
         self.assignment_threshold = 10.0  # minimum iou to assign a detection to a track
         self.max_tracks = 25  # maximum number of active tracks
 
         # print("Module tracker started.")
 
+    def start(self, data):
+        """
+        Required, but unused.
+        """
+        pass
+
     def stop(self, data):
         """
-        Cleanup or shutdown tracker module.
+        Required, but unused
         """
         pass
 
