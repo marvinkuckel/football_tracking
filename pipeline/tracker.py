@@ -284,7 +284,14 @@ class Tracker:
             survivors = []  # ... keep existing filters that are still alive
             for f in self.filters:
                 f.predict(opticalFlow)
-                thresh = self.birth_threshold if not f.is_confirmed else self.death_threshold
+                # class-specific thresholds
+                if f.cls == 0:
+                    birth_thr = self.ball_birth_threshold
+                    death_thr = self.ball_death_threshold
+                else:
+                    birth_thr = self.birth_threshold
+                    death_thr = self.death_threshold
+                thresh = birth_thr if not f.is_confirmed else death_thr
                 if f.missed_frames <= thresh:
                     survivors.append(f)  # only keep filters that are not dead
             self.filters = survivors
@@ -329,7 +336,15 @@ class Tracker:
 
         survivors = []  # keep only filters that are still alive
         for f in self.filters:
-            thresh = self.death_threshold if f.is_confirmed else self.birth_threshold  # set threshold based on confirmation status
+            # class-specific thresholds
+            if f.cls == 0:
+                birth_thr = self.ball_birth_threshold
+                death_thr = self.ball_death_threshold
+            else:
+                birth_thr = self.birth_threshold
+                death_thr = self.death_threshold
+
+            thresh = death_thr if f.is_confirmed else birth_thr  # set threshold based on confirmation status
 
             if f.missed_frames <= thresh:  # if filter is not dead...
                 survivors.append(f)  # ... keep it in the list
