@@ -6,15 +6,6 @@ import numpy as np
 from scipy.optimize import linear_sum_assignment  # for solving the assignment problem
 
 class Filter:
-    def __init__(self, id, z, cls, current_optical_flow):
-        # TODO: Implement filter initializstion
-        self.id = id
-        self.cls = cls
-        self.box = z
-        self.velocity = current_optical_flow
-        self.track_age = 0
-        self.missing_age = 0
-
     def __init__(self, z, cls):
         """
         Initialize filter with first measurement.
@@ -159,13 +150,13 @@ class Filter:
 
     def mahalanobis(self, detections) -> list:
         """
-        Returns mahalanobis distanz for a list of detections
+        Returns Mahalanobis distance for a list of detections
         """
         S = self.H @ self.P @ self.H.T + self.R
         L = np.linalg.cholesky(S)
         y = np.array(detections) - (self.H @ self.x)
         z = np.linalg.solve(L, y.T).T
-        return np.sum(z**2, axis=1)
+        return np.sqrt(np.sum(z**2, axis=1))
 
     @property  # decorator: to allow access like an attribute without calling as a method
     def box(self):
@@ -184,25 +175,30 @@ class Filter:
 class Tracker:
     def __init__(self):
         self.name = "Tracker"
-
-    def start(self, data):
-        """
-        Initialize tracker state and parameters.
-        """
+        
         self.filters = []  # list of active Kalman filters (tracks)
         self.next_id = 1  # next unique track ID
 
+        # separate birth/death for ball vs others
+        self.ball_birth_threshold = 3  # frames needed to confirm a new ball track
+        self.ball_death_threshold = 5  # frames without update before deleting a ball track
         self.birth_threshold = 10  # frames needed to confirm a new track
         self.death_threshold = 20  # frames without update before deleting a track
         self.output_threshold = 5  # if missing_frames is greater, dont return it as an active track, but dont delete it either
-        self.assignment_threshold = 10.0  # minimum iou to assign a detection to a track
+        self.assignment_threshold = 10.0  # maximum allowed cost for assigning detection to sa track 
         self.max_tracks = 25  # maximum number of active tracks
 
         # print("Module tracker started.")
 
+    def start(self, data):
+        """
+        Required, but unused.
+        """
+        pass
+
     def stop(self, data):
         """
-        Cleanup or shutdown tracker module.
+        Required, but unused
         """
         pass
 
@@ -288,7 +284,14 @@ class Tracker:
             survivors = []  # ... keep existing filters that are still alive
             for f in self.filters:
                 f.predict(opticalFlow)
-                thresh = self.birth_threshold if not f.is_confirmed else self.death_threshold
+                # class-specific thresholds
+                if f.cls == 0:
+                    birth_thr = self.ball_birth_threshold
+                    death_thr = self.ball_death_threshold
+                else:
+                    birth_thr = self.birth_threshold
+                    death_thr = self.death_threshold
+                thresh = birth_thr if not f.is_confirmed else death_thr
                 if f.missed_frames <= thresh:
                     survivors.append(f)  # only keep filters that are not dead
             self.filters = survivors
@@ -300,8 +303,8 @@ class Tracker:
             f.predict(opticalFlow)
             mahal = f.mahalanobis(detections)
             for j, det in enumerate(detections):
-                # euclidean distance
-                if ((f.box[0] - det[0])**2 + (f.box[1] - det[1])**4)**0.5 < 15 and max([self.iou(fil.box, det) for fil in self.filters if fil is not f]) < 0.7:
+                # euclidean gate
+                if ((f.box[0] - det[0])**2 + (f.box[1] - det[1])**2)**0.5 < 15 and max([self.iou(fil.box, det) for fil in self.filters if fil is not f]) < 0.7:
                     cost_matrix[i, j] = (1.0 - self.iou(f.box, det)) * mahal[j]  # calculate IoU and fill cost matrix
                 else:
                     cost_matrix[i, j] = 1000
@@ -322,8 +325,9 @@ class Tracker:
                     self.next_id += 1
 
         for j, det in enumerate(detections):
+            # if detection is non-ball but overlaps existing, skip only this one
             if detectionClasses[j] != 0 and max([self.iou(f.box, det) for f in self.filters]) > 0.5:
-                break
+                continue
             if j not in assigned_detections:  # if detection was not assigned to a filter...
                 new_filter = Filter(det, detectionClasses[j])  # create a new filter
                 new_filter.hits = 1
@@ -333,14 +337,23 @@ class Tracker:
 
         survivors = []  # keep only filters that are still alive
         for f in self.filters:
-            thresh = self.death_threshold if f.is_confirmed else self.birth_threshold  # set threshold based on confirmation status
+            # class-specific thresholds
+            if f.cls == 0:
+                birth_thr = self.ball_birth_threshold
+                death_thr = self.ball_death_threshold
+            else:
+                birth_thr = self.birth_threshold
+                death_thr = self.death_threshold
+
+            thresh = death_thr if f.is_confirmed else birth_thr  # set threshold based on confirmation status
 
             if f.missed_frames <= thresh:  # if filter is not dead...
                 survivors.append(f)  # ... keep it in the list
 
             # confirm if minimum hits is reached
-            if not f.is_confirmed and f.hits >= self.birth_threshold:
+            if not f.is_confirmed and f.hits >= birth_thr:
                 f.is_confirmed = True
+
 
         self.filters = survivors
 
