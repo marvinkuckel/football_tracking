@@ -150,13 +150,13 @@ class Filter:
 
     def mahalanobis(self, detections) -> list:
         """
-        Returns mahalanobis distanz for a list of detections
+        Returns Mahalanobis distance for a list of detections
         """
         S = self.H @ self.P @ self.H.T + self.R
         L = np.linalg.cholesky(S)
         y = np.array(detections) - (self.H @ self.x)
         z = np.linalg.solve(L, y.T).T
-        return np.sum(z**2, axis=1)
+        return np.sqrt(np.sum(z**2, axis=1))
 
     @property  # decorator: to allow access like an attribute without calling as a method
     def box(self):
