@@ -21,7 +21,7 @@ class Filter:
         x, y, w, h = z  # extract initial position and size from detection
         self.x = np.array([x, y, 0, 0, 0, 0, w, h], dtype=float)  # initial state vector [x, y, vx, vy, ax, ay, w, h]
 
-        self.P = np.diag([5.0, 5.0, 50.0, 59.0, 100.0, 100.0, 5.0, 5.0])  # initial state covariance matrix
+        self.P = np.diag([5.0, 5.0, 50.0, 50.0, 100.0, 100.0, 5.0, 5.0])  # initial state covariance matrix
 
         self.F = np.array([  # state transition matrix (constant velocity model (+ width & height))
             [1, 0, 1, 0, 1/2, 0,   0, 0],
@@ -137,7 +137,7 @@ class Filter:
 
         y = z - (self.H @ self.x)  # innovation (measurement residual)
         S = self.H @ self.P @ self.H.T + self.R  # innovation covariance
-        K = self.P @ self.H.T @ np.linalg.inv(S)  # Kalman gain
+        K = np.linalg.solve(S.T, (self.H @ self.P).T).T  # Kalman gain
 
         self.x = self.x + K @ y  # update state estimate
         I = np.eye(8)  # identity matrix for covariance update
