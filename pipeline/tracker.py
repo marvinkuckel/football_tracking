@@ -180,12 +180,12 @@ class Tracker:
         self.next_id = 1  # next unique track ID
 
         # separate birth/death for ball vs others
-        self.ball_birth_threshold = 3   # frames needed to confirm a new ball track
+        self.ball_birth_threshold = 3  # frames needed to confirm a new ball track
         self.ball_death_threshold = 5  # frames without update before deleting a ball track
-        self.birth_threshold = 10       # frames needed to confirm a new track
-        self.death_threshold = 20       # frames without update before deleting a track
-        self.output_threshold = 5       # if missing_frames is greater, dont return it as an active track, but dont delete it either
-        self.assignment_threshold = 10.0  # minimum iou to assign a detection to a track
+        self.birth_threshold = 10  # frames needed to confirm a new track
+        self.death_threshold = 20  # frames without update before deleting a track
+        self.output_threshold = 5  # if missing_frames is greater, dont return it as an active track, but dont delete it either
+        self.assignment_threshold = 10.0  # maximum allowed cost for assigning detection to sa track 
         self.max_tracks = 25  # maximum number of active tracks
 
         # print("Module tracker started.")
